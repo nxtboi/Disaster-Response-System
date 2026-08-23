@@ -1,0 +1,11 @@
+{
+  "name": "DRS",
+  "description": "Drone Response & Surveillance system with free tactical map radar and Google Maps telemetry tracking.",
+  "requestFramePermissions": [
+    "geolocation",
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

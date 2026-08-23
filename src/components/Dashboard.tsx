@@ -2,6 +2,7 @@ import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { MainContent } from "./MainContent";
 import { RightPanel } from "./RightPanel";
+import { useDRS } from "../store";
 import { motion } from "motion/react";
 
 export function Dashboard({ 
@@ -15,6 +16,8 @@ export function Dashboard({
   onLogout?: () => void;
   userRole?: "admin" | "operator";
 }) {
+  const { activeView } = useDRS();
+
   return (
     <motion.div 
       initial={{ opacity: 0 }} 
@@ -31,9 +34,10 @@ export function Dashboard({
         />
         <div className="flex-1 flex overflow-hidden">
           <MainContent />
-          <RightPanel />
+          {activeView === "Dashboard" && <RightPanel />}
         </div>
       </div>
     </motion.div>
   );
 }
+

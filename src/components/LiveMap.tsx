@@ -8,14 +8,25 @@ import { FreeTacticalMap } from './FreeTacticalMap';
 // Initial API Key from build environment
 const ENV_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
-function MapController({ center }: { center: { lat: number; lng: number } | null }) {
+function MapController({
+  center,
+  target,
+}: {
+  center: { lat: number; lng: number } | null;
+  target: { lat: number; lng: number; zoom?: number; timestamp: number } | null;
+}) {
   const map = useMap();
 
   useEffect(() => {
-    if (map && center) {
+    if (map && target) {
+      map.panTo({ lat: target.lat, lng: target.lng });
+      if (target.zoom) {
+        map.setZoom(target.zoom);
+      }
+    } else if (map && center) {
       map.panTo(center);
     }
-  }, [center, map]);
+  }, [target, center, map]);
 
   return null;
 }
@@ -296,21 +307,22 @@ export function LiveMap() {
             onDragstart={() => setIsTracking(false)}
             onDrag={() => setIsTracking(false)}
           >
-            <MapController center={isTracking ? center : (centerMapTarget ? { lat: centerMapTarget.lat, lng: centerMapTarget.lng } : null)} />
+            <MapController center={isTracking ? center : null} target={centerMapTarget} />
 
             {/* Tactical Waypoint Markers */}
             {waypoints.map((wp) => {
               const isSelected = selectedWaypointId === wp.id;
+              const isSurvivorDistress = wp.name.toLowerCase().includes('survivor') || wp.name.toLowerCase().includes('help') || wp.name.toLowerCase().includes('distress');
               return (
                 <AdvancedMarker
                   key={wp.id}
                   position={{ lat: wp.coordinates.lat, lng: wp.coordinates.lng }}
-                  zIndex={isSelected ? 1100 : 900}
+                  zIndex={isSurvivorDistress ? 1500 : isSelected ? 1100 : 900}
                   onClick={() => {
                     if (selectedWaypointId === wp.id) {
                       removeWaypoint(wp.id);
                       setSelectedWaypointId(null);
-                      setWaypointPlacedToast(`Deleted Waypoint: ${wp.name}`);
+                      setWaypointPlacedToast(`Deleted Pin: ${wp.name}`);
                       setTimeout(() => setWaypointPlacedToast(null), 3000);
                     } else {
                       setSelectedWaypointId(wp.id);
@@ -319,25 +331,42 @@ export function LiveMap() {
                     }
                   }}
                 >
-                  <div className="relative w-10 h-10 flex items-center justify-center cursor-pointer group">
-                    {isSelected && (
-                      <div className="absolute inset-0 bg-amber-500/30 rounded-full animate-ping"></div>
-                    )}
-                    <div
-                      className={`w-7 h-7 rounded-lg transform rotate-45 flex items-center justify-center font-mono font-bold text-[10px] shadow-lg transition-transform group-hover:scale-110 ${
-                        isSelected
-                          ? 'bg-amber-400 text-black border-2 border-white shadow-[0_0_18px_rgba(245,158,11,0.95)]'
-                          : 'bg-zinc-950 text-amber-300 border border-amber-500/80 shadow-[0_0_10px_rgba(245,158,11,0.3)]'
-                      }`}
-                    >
-                      <div className="transform -rotate-45 font-mono font-black">
-                        {String(wp.index).padStart(2, '0')}
+                  {isSurvivorDistress ? (
+                    <div className="relative w-14 h-14 flex items-center justify-center cursor-pointer group">
+                      <div className="absolute inset-0 bg-rose-500/40 rounded-full animate-ping"></div>
+                      <div className="absolute inset-1.5 bg-rose-500/25 rounded-full animate-pulse border-2 border-rose-500 shadow-[0_0_18px_rgba(244,63,94,0.8)]"></div>
+                      <div className="w-8 h-8 rounded-full bg-rose-600 text-white border-2 border-white flex items-center justify-center shadow-[0_0_22px_rgba(244,63,94,1)] z-10 transition-transform group-hover:scale-125">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                          <line x1="12" x2="12" y1="19" y2="22"/>
+                        </svg>
+                      </div>
+                      <div className="absolute -bottom-6 whitespace-nowrap px-2 py-0.5 rounded text-[9px] font-mono font-extrabold bg-rose-950 text-rose-200 border border-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.7)] flex items-center gap-1 pointer-events-none">
+                        <span>{wp.name}</span>
                       </div>
                     </div>
-                    <div className="absolute -bottom-5 whitespace-nowrap px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-zinc-950/90 text-amber-300 border border-amber-500/50 shadow-md">
-                      {wp.name}
+                  ) : (
+                    <div className="relative w-10 h-10 flex items-center justify-center cursor-pointer group">
+                      {isSelected && (
+                        <div className="absolute inset-0 bg-amber-500/30 rounded-full animate-ping"></div>
+                      )}
+                      <div
+                        className={`w-7 h-7 rounded-lg transform rotate-45 flex items-center justify-center font-mono font-bold text-[10px] shadow-lg transition-transform group-hover:scale-110 ${
+                          isSelected
+                            ? 'bg-amber-400 text-black border-2 border-white shadow-[0_0_18px_rgba(245,158,11,0.95)]'
+                            : 'bg-zinc-950 text-amber-300 border border-amber-500/80 shadow-[0_0_10px_rgba(245,158,11,0.3)]'
+                        }`}
+                      >
+                        <div className="transform -rotate-45 font-mono font-black">
+                          {String(wp.index).padStart(2, '0')}
+                        </div>
+                      </div>
+                      <div className="absolute -bottom-5 whitespace-nowrap px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-zinc-950/90 text-amber-300 border border-amber-500/50 shadow-md pointer-events-none">
+                        {wp.name}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </AdvancedMarker>
               );
             })}

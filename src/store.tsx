@@ -19,6 +19,7 @@ interface DRSContextType {
   systemStatus: "ALL SYSTEMS OPERATIONAL" | "WARNINGS DETECTED" | "CRITICAL ERRORS";
   updateDroneTelemetry: (id: string, updates: Partial<Drone>) => void;
   userLocation: UserLocation | null;
+  setUserLocation: (loc: UserLocation | null) => void;
   isLocatingUser: boolean;
   userLocationError: string | null;
   requestUserLocation: (deployFleetNearby?: boolean) => Promise<UserLocation | null>;
@@ -45,6 +46,7 @@ interface DRSContextType {
   // Fleet Management (Add & Remove Drones)
   addDrone: (customData?: Partial<Drone>) => Drone;
   removeDrone: (id: string) => void;
+  addAlert: (droneId: string, message: string) => void;
 }
 
 function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -325,6 +327,20 @@ export function DRSProvider({ children }: { children: ReactNode }) {
     );
   };
 
+  const addAlert = (droneId: string, message: string) => {
+    setDrones((prev) =>
+      prev.map((d) => {
+        if (d.id === droneId) {
+          return {
+            ...d,
+            alerts: [message, ...d.alerts.filter((a) => a !== message)].slice(0, 15),
+          };
+        }
+        return d;
+      })
+    );
+  };
+
   const deployFleetToLocation = (lat: number, lng: number) => {
     setDrones((prevDrones) => [
       {
@@ -507,6 +523,7 @@ export function DRSProvider({ children }: { children: ReactNode }) {
         systemStatus,
         updateDroneTelemetry,
         userLocation,
+        setUserLocation,
         isLocatingUser,
         userLocationError,
         requestUserLocation,
@@ -530,6 +547,7 @@ export function DRSProvider({ children }: { children: ReactNode }) {
         totalWaypointDistanceKm,
         addDrone,
         removeDrone,
+        addAlert,
       }}
     >
       {children}

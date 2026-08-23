@@ -5,14 +5,13 @@ import { LidarPanel } from "./LidarPanel";
 import { AlertPanel } from "./AlertPanel";
 import { ReadyToProtect } from "./ReadyToProtect";
 import { VoiceFeed } from "./VoiceFeed";
-import { MissionPlanner } from "./MissionPlanner";
 import {
   PanelRightClose,
   PanelRightOpen,
 } from "lucide-react";
 
 export function RightPanel() {
-  const { selectedDrone, activeView, isStatusPanelVisible, toggleStatusPanel, setIsStatusPanelVisible } = useDRS();
+  const { selectedDrone, isStatusPanelVisible, toggleStatusPanel, setIsStatusPanelVisible } = useDRS();
 
   // When hidden, render a sleek tab on the edge to re-open
   if (!isStatusPanelVisible) {
@@ -54,35 +53,18 @@ export function RightPanel() {
       </div>
 
       <div className="p-4 flex flex-col gap-4 pb-16 h-full">
-        {activeView === "Dashboard" && (
+        <ReadyToProtect />
+        {selectedDrone && (
           <>
-            <ReadyToProtect />
-            {selectedDrone && (
-              <>
-                <BatteryStatus drone={selectedDrone} />
-                <TelemetryPanel drone={selectedDrone} />
-                <LidarPanel />
-                <VoiceFeed />
-              </>
-            )}
-            <AlertPanel />
+            <BatteryStatus drone={selectedDrone} />
+            <TelemetryPanel drone={selectedDrone} />
+            <LidarPanel />
+            <VoiceFeed />
           </>
         )}
-
-        {activeView === "Missions" && (
-          <div className="flex flex-col gap-6">
-            <MissionPlanner />
-          </div>
-        )}
-
-        {(activeView === "Live Monitoring" || activeView === "Alerts") && (
-          <div className="flex flex-col items-center justify-center h-full text-zinc-500 gap-4">
-             <span className="text-xs tracking-widest uppercase text-center font-mono">
-               Select Dashboard for full telemetry & sensors
-             </span>
-          </div>
-        )}
+        <AlertPanel />
       </div>
     </aside>
   );
 }
+

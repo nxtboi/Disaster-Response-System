@@ -4,7 +4,7 @@ import { cn } from "../lib/utils";
 import { 
   Crosshair, Navigation, Video, Activity, Map as MapIcon, 
   Radio, Target, AlertTriangle, Settings, Plus, LayoutDashboard, LogOut, Cpu, Route,
-  Trash2, X, ShieldAlert, Sparkles, Check, ChevronRight, Zap
+  Trash2, X, ShieldAlert, Sparkles, Check, ChevronRight, Zap, Mic
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { ConnectionStatus, Drone } from "../types";
@@ -12,6 +12,7 @@ import { ConnectionStatus, Drone } from "../types";
 const NAV_ITEMS = [
   { id: "Dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { id: "Live Monitoring", icon: Video, label: "Live Monitoring" },
+  { id: "Voice Detection", icon: Mic, label: "AI Voice Detection" },
   { id: "Missions", icon: Target, label: "Autonomous Missions" },
   { id: "Alerts", icon: AlertTriangle, label: "Alerts" },
   { id: "Hardware", icon: Cpu, label: "Hardware Link" },

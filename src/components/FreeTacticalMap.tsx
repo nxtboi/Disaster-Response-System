@@ -93,22 +93,27 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
       delete (mapContainerRef.current as any)._leaflet_id;
     }
 
-    const initialLat = userLocation
+    const initialLat = centerMapTarget
+      ? centerMapTarget.lat
+      : userLocation
       ? userLocation.lat
       : selectedDrone
       ? selectedDrone.coordinates.lat
       : 28.4595;
-    const initialLng = userLocation
+    const initialLng = centerMapTarget
+      ? centerMapTarget.lng
+      : userLocation
       ? userLocation.lng
       : selectedDrone
       ? selectedDrone.coordinates.lng
       : 77.0266;
+    const initialZoom = centerMapTarget?.zoom || (userLocation ? 16 : 14);
 
     let map: L.Map;
     try {
       map = L.map(mapContainerRef.current, {
         center: [initialLat, initialLng],
-        zoom: 14,
+        zoom: initialZoom,
         zoomControl: false,
         attributionControl: false,
       });
@@ -130,6 +135,20 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
 
     tileLayerRef.current = tileLayer;
     mapInstanceRef.current = map;
+
+    // Immediately trigger invalidateSize and center verification
+    setTimeout(() => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.invalidateSize();
+        if (centerMapTarget) {
+          mapInstanceRef.current.setView(
+            [centerMapTarget.lat, centerMapTarget.lng],
+            centerMapTarget.zoom || 16,
+            { animate: false }
+          );
+        }
+      }
+    }, 120);
 
     map.on('dragstart', () => {
       setIsTracking(false);
@@ -183,9 +202,10 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
   // Respond to centerMapTarget triggers (e.g. GPS update or Deploy fleet)
   useEffect(() => {
     if (centerMapTarget && mapInstanceRef.current) {
+      mapInstanceRef.current.invalidateSize();
       mapInstanceRef.current.setView(
         [centerMapTarget.lat, centerMapTarget.lng],
-        centerMapTarget.zoom || 15,
+        centerMapTarget.zoom || 16,
         { animate: true }
       );
     }
@@ -442,11 +462,27 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
     // 2. Add or update waypoint markers
     waypoints.forEach((wp) => {
       const isSelected = selectedWaypointId === wp.id;
+      const isSurvivorDistress = wp.name.toLowerCase().includes('survivor') || wp.name.toLowerCase().includes('help') || wp.name.toLowerCase().includes('distress');
       const latLng: [number, number] = [wp.coordinates.lat, wp.coordinates.lng];
 
       const wpIcon = L.divIcon({
         className: 'drs-waypoint-icon',
-        html: `
+        html: isSurvivorDistress ? `
+          <div class="relative w-14 h-14 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-auto cursor-pointer group">
+            <div class="absolute inset-0 bg-rose-500/40 rounded-full animate-ping"></div>
+            <div class="absolute inset-1.5 bg-rose-500/25 rounded-full animate-pulse border-2 border-rose-500 shadow-[0_0_18px_rgba(244,63,94,0.8)]"></div>
+            <div class="w-8 h-8 rounded-full bg-rose-600 text-white border-2 border-white flex items-center justify-center shadow-[0_0_22px_rgba(244,63,94,1)] z-10 transition-transform group-hover:scale-125">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" x2="12" y1="19" y2="22"/>
+              </svg>
+            </div>
+            <div class="absolute -bottom-6 whitespace-nowrap px-2 py-0.5 rounded text-[9px] font-mono font-extrabold bg-rose-950 text-rose-200 border border-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.7)] flex items-center gap-1">
+              <span>${wp.name}</span>
+            </div>
+          </div>
+        ` : `
           <div class="relative w-12 h-12 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-auto cursor-pointer group">
             ${isSelected ? '<div class="absolute inset-0 bg-amber-500/25 rounded-full animate-ping"></div>' : ''}
             <div class="absolute inset-1 bg-amber-500/10 rounded-full animate-pulse border border-amber-500/30"></div>
@@ -465,13 +501,13 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
             </div>
           </div>
         `,
-        iconSize: [48, 48],
-        iconAnchor: [24, 24],
+        iconSize: isSurvivorDistress ? [56, 56] : [48, 48],
+        iconAnchor: isSurvivorDistress ? [28, 28] : [24, 24],
       });
 
       let marker = waypointMarkersRef.current.get(wp.id);
       if (!marker) {
-        marker = L.marker(latLng, { icon: wpIcon, zIndexOffset: 800 }).addTo(map);
+        marker = L.marker(latLng, { icon: wpIcon, zIndexOffset: isSurvivorDistress ? 1500 : 800 }).addTo(map);
         marker.on('click', (ev: L.LeafletMouseEvent) => {
           L.DomEvent.stopPropagation(ev);
           if (selectedWaypointIdRef.current === wp.id) {
@@ -487,16 +523,21 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
         });
 
         marker.bindPopup(`
-          <div class="font-mono text-xs text-zinc-200 min-w-[160px]">
-            <div class="font-bold text-amber-400 flex items-center justify-between gap-2 border-b border-zinc-800 pb-1 mb-1.5">
-              <span>WP-${String(wp.index).padStart(2, '0')}: ${wp.name}</span>
-              <span class="text-[9px] px-1.5 py-0.5 rounded bg-amber-950/80 border border-amber-500/40 text-amber-300">${wp.action}</span>
+          <div class="font-mono text-xs text-zinc-200 min-w-[180px]">
+            <div class="font-bold ${isSurvivorDistress ? 'text-rose-400' : 'text-amber-400'} flex items-center justify-between gap-2 border-b border-zinc-800 pb-1 mb-1.5">
+              <span>${isSurvivorDistress ? '🚨 ' : 'WP-' + String(wp.index).padStart(2, '0') + ': '}${wp.name}</span>
+              <span class="text-[9px] px-1.5 py-0.5 rounded ${isSurvivorDistress ? 'bg-rose-950/90 border border-rose-500/50 text-rose-300' : 'bg-amber-950/80 border border-amber-500/40 text-amber-300'}">${isSurvivorDistress ? 'AI VOICE PIN' : wp.action}</span>
             </div>
             <div class="space-y-1 text-[11px] text-zinc-300 mb-2">
               <div><span class="text-zinc-500">COORDS:</span> ${wp.coordinates.lat.toFixed(5)}, ${wp.coordinates.lng.toFixed(5)}</div>
               <div><span class="text-zinc-500">ALTITUDE:</span> <span class="text-cyan-400">${wp.altitude}m</span></div>
               <div><span class="text-zinc-500">TARGET SPD:</span> ${wp.speed || 35} km/h</div>
             </div>
+            ${isSurvivorDistress ? `
+              <div class="text-[10px] text-rose-200/90 bg-rose-950/40 p-1.5 rounded border border-rose-500/30">
+                Acoustic localized survivor distress pinpoint.
+              </div>
+            ` : ''}
           </div>
         `, { className: 'drs-popup', closeButton: false });
 
@@ -504,6 +545,11 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
       } else {
         marker.setLatLng(latLng);
         marker.setIcon(wpIcon);
+      }
+
+      // Auto-open popup if selected
+      if (selectedWaypointId === wp.id && !marker.isPopupOpen()) {
+        setTimeout(() => marker.openPopup(), 100);
       }
     });
 

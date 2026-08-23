@@ -12,7 +12,6 @@ import { ConnectionStatus, Drone } from "../types";
 const NAV_ITEMS = [
   { id: "Dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { id: "Live Monitoring", icon: Video, label: "Live Monitoring" },
-  { id: "Waypoints", icon: Route, label: "Tactical Waypoints" },
   { id: "Missions", icon: Target, label: "Autonomous Missions" },
   { id: "Alerts", icon: AlertTriangle, label: "Alerts" },
   { id: "Hardware", icon: Cpu, label: "Hardware Link" },

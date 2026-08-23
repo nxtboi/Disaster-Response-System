@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useDRS } from "../store";
 import { TelemetryPanel } from "./TelemetryPanel";
 import { BatteryStatus } from "./BatteryStatus";
@@ -7,22 +6,13 @@ import { AlertPanel } from "./AlertPanel";
 import { ReadyToProtect } from "./ReadyToProtect";
 import { VoiceFeed } from "./VoiceFeed";
 import { MissionPlanner } from "./MissionPlanner";
-import { TacticalWaypointsPanel } from "./TacticalWaypointsPanel";
 import {
-  Activity,
-  Route,
-  ChevronRight,
-  ChevronLeft,
   PanelRightClose,
   PanelRightOpen,
-  EyeOff,
-  Sliders,
 } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
 
 export function RightPanel() {
   const { selectedDrone, activeView, isStatusPanelVisible, toggleStatusPanel, setIsStatusPanelVisible } = useDRS();
-  const [dashboardTab, setDashboardTab] = useState<"telemetry" | "waypoints">("telemetry");
 
   // When hidden, render a sleek tab on the edge to re-open
   if (!isStatusPanelVisible) {
@@ -66,58 +56,21 @@ export function RightPanel() {
       <div className="p-4 flex flex-col gap-4 pb-16 h-full">
         {activeView === "Dashboard" && (
           <>
-            {/* Quick Tab Switcher for Telemetry vs Tactical Waypoints */}
-            <div className="flex items-center p-1 bg-zinc-900/90 border border-zinc-800 rounded-lg text-xs font-mono">
-              <button
-                onClick={() => setDashboardTab("telemetry")}
-                className={`flex-1 py-1.5 px-2 rounded-md flex items-center justify-center gap-1.5 transition-colors ${
-                  dashboardTab === "telemetry"
-                    ? "bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40"
-                    : "text-zinc-400 hover:text-zinc-200"
-                }`}
-              >
-                <Activity className="w-3.5 h-3.5" />
-                <span>TELEMETRY</span>
-              </button>
-              <button
-                onClick={() => setDashboardTab("waypoints")}
-                className={`flex-1 py-1.5 px-2 rounded-md flex items-center justify-center gap-1.5 transition-colors ${
-                  dashboardTab === "waypoints"
-                    ? "bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40"
-                    : "text-zinc-400 hover:text-zinc-200"
-                }`}
-              >
-                <Route className="w-3.5 h-3.5 text-amber-400" />
-                <span>WAYPOINTS</span>
-              </button>
-            </div>
-
-            {dashboardTab === "telemetry" ? (
+            <ReadyToProtect />
+            {selectedDrone && (
               <>
-                <ReadyToProtect />
-                {selectedDrone && (
-                  <>
-                    <BatteryStatus drone={selectedDrone} />
-                    <TelemetryPanel drone={selectedDrone} />
-                    <LidarPanel />
-                    <VoiceFeed />
-                  </>
-                )}
-                <AlertPanel />
+                <BatteryStatus drone={selectedDrone} />
+                <TelemetryPanel drone={selectedDrone} />
+                <LidarPanel />
+                <VoiceFeed />
               </>
-            ) : (
-              <TacticalWaypointsPanel />
             )}
+            <AlertPanel />
           </>
-        )}
-        
-        {activeView === "Waypoints" && (
-          <TacticalWaypointsPanel />
         )}
 
         {activeView === "Missions" && (
           <div className="flex flex-col gap-6">
-            <TacticalWaypointsPanel />
             <MissionPlanner />
           </div>
         )}

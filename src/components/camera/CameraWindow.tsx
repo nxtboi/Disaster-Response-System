@@ -47,20 +47,20 @@ export function CameraWindow({
   onUpdateConfig,
   onToggleFocus,
 }: CameraWindowProps) {
-  const { sources: availableSources, allSources } = useCameraSources(drones, true);
+  const { sources: availableSources, allSources, activeVisitorCount } = useCameraSources(drones, true);
   const activeSource =
     availableSources.find((s) => s.id === config.cameraSourceId) ||
     allSources.find((s) => s.id === config.cameraSourceId) ||
     availableSources[0] ||
     allSources[0];
 
-  const matchedDrone = drones.find((d) => d.id === activeSource.droneId);
+  const matchedDrone = drones.find((d) => d.id === activeSource?.droneId);
 
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [snapshotFlash, setSnapshotFlash] = useState(false);
   const [recSeconds, setRecSeconds] = useState(120);
-  const [selectorCategory, setSelectorCategory] = useState<"all" | "drones" | "fixed">("all");
+  const [selectorCategory, setSelectorCategory] = useState<"all" | "drones" | "visitors" | "fixed">("all");
   const [showOverlay, setShowOverlay] = useState(true);
 
   // Timer for recording counter
@@ -99,7 +99,8 @@ export function CameraWindow({
   // ONLY SHOW AVAILABLE CAMERAS IN DROPDOWN
   const filteredSources = availableSources.filter((src) => {
     if (selectorCategory === "drones") return !!src.droneId;
-    if (selectorCategory === "fixed") return !src.droneId;
+    if (selectorCategory === "visitors") return src.lensType === "visitor-camera";
+    if (selectorCategory === "fixed") return src.lensType === "ground-cctv" || src.lensType === "device-webcam";
     return true;
   });
 
@@ -329,18 +330,26 @@ export function CameraWindow({
           </div>
 
           {/* Category Filter Tabs */}
-          <div className="flex gap-1.5 mb-2.5">
-            {(["all", "drones", "fixed"] as const).map((cat) => (
+          <div className="flex gap-1.5 mb-2.5 overflow-x-auto custom-scrollbar pb-0.5">
+            {[
+              { id: "all", label: "All Available" },
+              { id: "visitors", label: `Visitors (${activeVisitorCount})`, badge: true },
+              { id: "drones", label: "Drones" },
+              { id: "fixed", label: "Ground CCTVs" },
+            ].map((cat) => (
               <button
-                key={cat}
-                onClick={() => setSelectorCategory(cat)}
-                className={`px-2.5 py-1 rounded text-[10px] uppercase font-bold transition-colors ${
-                  selectorCategory === cat
+                key={cat.id}
+                onClick={() => setSelectorCategory(cat.id as any)}
+                className={`px-2.5 py-1 rounded text-[10px] uppercase font-bold transition-colors flex items-center gap-1.5 shrink-0 ${
+                  selectorCategory === cat.id
                     ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
                     : "text-zinc-400 hover:text-zinc-200 bg-zinc-900 border border-zinc-800"
                 }`}
               >
-                {cat === "all" ? "All Available" : cat === "drones" ? "Available Drones" : "Ground / Webcams"}
+                <span>{cat.label}</span>
+                {cat.badge && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse ml-0.5" />
+                )}
               </button>
             ))}
           </div>

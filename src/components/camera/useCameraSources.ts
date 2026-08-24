@@ -1,9 +1,23 @@
 import { useState, useEffect } from "react";
 import { Drone } from "../../types";
 import { CameraSourceInfo, getAvailableCameraSources } from "./CameraTypes";
+import { useVisitorCameras } from "./useVisitorCameras";
 
-export function useCameraSources(drones: Drone[], onlyAvailable: boolean = true) {
+export function useCameraSources(
+  drones: Drone[],
+  onlyAvailable: boolean = true,
+  currentUsername: string = "Operator"
+) {
   const [hardwareDevices, setHardwareDevices] = useState<MediaDeviceInfo[]>([]);
+  const {
+    visitors,
+    visitorSources,
+    isBroadcasting,
+    startBroadcasting,
+    stopBroadcasting,
+    toggleBroadcasting,
+    activeVisitorCount,
+  } = useVisitorCameras(currentUsername);
 
   useEffect(() => {
     let isMounted = true;
@@ -36,12 +50,19 @@ export function useCameraSources(drones: Drone[], onlyAvailable: boolean = true)
     };
   }, []);
 
-  const sources = getAvailableCameraSources(drones, hardwareDevices, onlyAvailable);
-  const allSources = getAvailableCameraSources(drones, hardwareDevices, false);
+  const sources = getAvailableCameraSources(drones, hardwareDevices, onlyAvailable, visitorSources);
+  const allSources = getAvailableCameraSources(drones, hardwareDevices, false, visitorSources);
 
   return {
     sources, // only available sources when onlyAvailable = true
     allSources,
     hardwareDevices,
+    visitors,
+    visitorSources,
+    isBroadcasting,
+    startBroadcasting,
+    stopBroadcasting,
+    toggleBroadcasting,
+    activeVisitorCount,
   };
 }

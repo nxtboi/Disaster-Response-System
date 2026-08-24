@@ -15,6 +15,13 @@ import {
   Activity,
   Gauge,
   Sparkles,
+  Users,
+  Radio,
+  Wifi,
+  ChevronLeft,
+  ChevronRight,
+  Share2,
+  User,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { Drone } from "../types";
@@ -34,18 +41,28 @@ interface CameraFeedProps {
 }
 
 type HudMode = "full" | "compact" | "reticle_only" | "off";
+type SelectorCategory = "all" | "drones" | "visitors" | "fixed";
 
 export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProps) {
-  const { drones, selectedDrone } = useDRS();
+  const { drones, selectedDrone, currentUser } = useDRS();
   const targetDrone = drone || selectedDrone;
 
-  const { sources: availableSources, allSources } = useCameraSources(drones, true);
+  const {
+    sources: availableSources,
+    allSources,
+    visitors,
+    visitorSources,
+    isBroadcasting,
+    toggleBroadcasting,
+    activeVisitorCount,
+  } = useCameraSources(drones, true, currentUser?.username || "Operator");
+
   const defaultSourceId = targetDrone
     ? `${targetDrone.id}-rgb-gimbal`
     : "DRN-01-rgb-gimbal";
 
   const [selectedSourceId, setSelectedSourceId] = useState<string>(defaultSourceId);
-  const [selectorCategory, setSelectorCategory] = useState<"all" | "drones" | "fixed">("all");
+  const [selectorCategory, setSelectorCategory] = useState<SelectorCategory>("all");
   const [visionMode, setVisionMode] = useState<VisionMode>("normal");
   const [showFiltersMenu, setShowFiltersMenu] = useState(false);
   const [showSelectorMenu, setShowSelectorMenu] = useState(false);
@@ -66,7 +83,11 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
 
   // Sync selected drone if source wasn't manually overridden
   useEffect(() => {
-    if (targetDrone && selectedSourceId.startsWith("DRN-") && !selectedSourceId.includes(targetDrone.id)) {
+    if (
+      targetDrone &&
+      selectedSourceId.startsWith("DRN-") &&
+      !selectedSourceId.includes(targetDrone.id)
+    ) {
       setSelectedSourceId(`${targetDrone.id}-rgb-gimbal`);
     }
   }, [targetDrone?.id]);
@@ -78,13 +99,32 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
     allSources[0];
 
   const matchedDrone = drones.find((d) => d.id === activeSource?.droneId) || targetDrone;
+  const isVisitorFeed = activeSource?.lensType === "visitor-camera";
 
   // Filter only available camera sources for the dropdown
   const filteredSources = availableSources.filter((src) => {
     if (selectorCategory === "drones") return !!src.droneId;
-    if (selectorCategory === "fixed") return !src.droneId;
+    if (selectorCategory === "visitors") return src.lensType === "visitor-camera";
+    if (selectorCategory === "fixed") return src.lensType === "ground-cctv" || src.lensType === "device-webcam";
     return true;
   });
+
+  // Visitor quick cycle helper
+  const allVisitorList = availableSources.filter((s) => s.lensType === "visitor-camera");
+  const currentVisitorIdx = allVisitorList.findIndex((s) => s.id === activeSource?.id);
+
+  const cycleVisitor = (direction: "next" | "prev") => {
+    if (allVisitorList.length === 0) return;
+    if (currentVisitorIdx === -1) {
+      setSelectedSourceId(allVisitorList[0].id);
+      return;
+    }
+    const nextIdx =
+      direction === "next"
+        ? (currentVisitorIdx + 1) % allVisitorList.length
+        : (currentVisitorIdx - 1 + allVisitorList.length) % allVisitorList.length;
+    setSelectedSourceId(allVisitorList[nextIdx].id);
+  };
 
   // Recording counter
   useEffect(() => {
@@ -195,10 +235,18 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
               setShowSelectorMenu(!showSelectorMenu);
               setShowFiltersMenu(false);
             }}
-            className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-zinc-800/90 hover:bg-zinc-700/90 border border-zinc-700/80 text-zinc-200 text-xs font-bold transition-colors truncate max-w-[190px]"
-            title="Click to switch drone or camera lens"
+            className={`flex items-center gap-1.5 px-2 py-0.5 rounded border text-xs font-bold transition-colors truncate max-w-[200px] ${
+              isVisitorFeed
+                ? "bg-emerald-950/60 border-emerald-500/50 text-emerald-200 hover:bg-emerald-900/60"
+                : "bg-zinc-800/90 hover:bg-zinc-700/90 border-zinc-700/80 text-zinc-200"
+            }`}
+            title="Click to switch drone, visitor camera, or ground sensor"
           >
-            <Video className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+            {isVisitorFeed ? (
+              <Users className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            ) : (
+              <Video className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+            )}
             <span className="truncate">{activeSource.shortLabel}</span>
             <ChevronDown className="w-3 h-3 text-zinc-400 shrink-0 ml-0.5" />
           </button>
@@ -208,10 +256,51 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
             <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
             <span>LIVE</span>
           </div>
+
+          {/* If viewing visitor, quick cycle arrow buttons */}
+          {isVisitorFeed && allVisitorList.length > 1 && (
+            <div className="hidden md:flex items-center gap-0.5 bg-zinc-950/70 border border-emerald-500/30 rounded px-1">
+              <button
+                onClick={() => cycleVisitor("prev")}
+                className="p-0.5 text-zinc-400 hover:text-emerald-300"
+                title="View previous visitor camera"
+              >
+                <ChevronLeft className="w-3 h-3" />
+              </button>
+              <span className="text-[9px] text-emerald-400 px-0.5">
+                {currentVisitorIdx + 1}/{allVisitorList.length}
+              </span>
+              <button
+                onClick={() => cycleVisitor("next")}
+                className="p-0.5 text-zinc-400 hover:text-emerald-300"
+                title="View next visitor camera"
+              >
+                <ChevronRight className="w-3 h-3" />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Action Controls */}
         <div className="flex items-center gap-1 text-zinc-400 shrink-0">
+          {/* Quick Broadcast Camera Toggle */}
+          <button
+            onClick={toggleBroadcasting}
+            className={`px-1.5 py-0.5 rounded text-[10px] flex items-center gap-1 border transition-colors ${
+              isBroadcasting
+                ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/50"
+                : "border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700"
+            }`}
+            title={
+              isBroadcasting
+                ? "You are broadcasting camera to all visitors (Click to stop)"
+                : "Broadcast your camera to other visitors"
+            }
+          >
+            <Radio className={`w-3 h-3 ${isBroadcasting ? "text-emerald-400 animate-pulse" : "text-zinc-500"}`} />
+            <span className="hidden sm:inline">{isBroadcasting ? "SHARING" : "SHARE CAM"}</span>
+          </button>
+
           {/* Data Overlay / HUD Mode Switcher */}
           <button
             onClick={() =>
@@ -372,29 +461,57 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
                 {filteredSources.length} AVAILABLE
               </span>
             </div>
-            <button
-              onClick={() => setShowSelectorMenu(false)}
-              className="text-xs text-zinc-400 hover:text-zinc-100 p-1"
-            >
-              ✕
-            </button>
+
+            {/* Broadcast My Camera button inside selector header */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={toggleBroadcasting}
+                className={`px-2 py-0.5 rounded text-[10px] flex items-center gap-1 border transition-colors ${
+                  isBroadcasting
+                    ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/50 font-bold"
+                    : "bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-zinc-200"
+                }`}
+                title="Broadcast your camera as a visitor node"
+              >
+                <Radio className={`w-3 h-3 ${isBroadcasting ? "text-emerald-400 animate-pulse" : "text-zinc-400"}`} />
+                <span>{isBroadcasting ? "BROADCASTING" : "BROADCAST MY CAM"}</span>
+              </button>
+              <button
+                onClick={() => setShowSelectorMenu(false)}
+                className="text-xs text-zinc-400 hover:text-zinc-100 p-1"
+              >
+                ✕
+              </button>
+            </div>
           </div>
 
           {/* Category Filter Tabs */}
-          <div className="flex gap-1.5 mb-2.5">
-            {(["all", "drones", "fixed"] as const).map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setSelectorCategory(cat)}
-                className={`px-2.5 py-1 rounded text-[10px] uppercase font-bold transition-colors ${
-                  selectorCategory === cat
-                    ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
-                    : "text-zinc-400 hover:text-zinc-200 bg-zinc-900 border border-zinc-800"
-                }`}
-              >
-                {cat === "all" ? "All Available" : cat === "drones" ? "Available Drones" : "Ground / Webcams"}
-              </button>
-            ))}
+          <div className="flex gap-1.5 mb-2.5 overflow-x-auto custom-scrollbar pb-0.5">
+            {[
+              { id: "all", label: "All Available", icon: Layers },
+              { id: "visitors", label: `Visitors (${activeVisitorCount})`, icon: Users, badge: true },
+              { id: "drones", label: "Drones", icon: Video },
+              { id: "fixed", label: "Ground CCTVs", icon: Video },
+            ].map((cat) => {
+              const Icon = cat.icon;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => setSelectorCategory(cat.id as SelectorCategory)}
+                  className={`px-2 py-1 rounded text-[10px] uppercase font-bold transition-colors flex items-center gap-1.5 shrink-0 ${
+                    selectorCategory === cat.id
+                      ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                      : "text-zinc-400 hover:text-zinc-200 bg-zinc-900 border border-zinc-800"
+                  }`}
+                >
+                  <Icon className="w-3 h-3 text-cyan-400" />
+                  <span>{cat.label}</span>
+                  {cat.badge && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse ml-0.5" />
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-1.5 pr-1">
@@ -406,6 +523,7 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
             ) : (
               filteredSources.map((src) => {
                 const isSelected = src.id === selectedSourceId;
+                const isSrcVisitor = src.lensType === "visitor-camera";
                 return (
                   <button
                     key={src.id}
@@ -415,20 +533,40 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
                     }}
                     className={`flex items-center justify-between p-2 rounded-lg border text-left transition-all ${
                       isSelected
-                        ? "bg-cyan-500/15 border-cyan-500/60 text-cyan-200"
+                        ? isSrcVisitor
+                          ? "bg-emerald-500/15 border-emerald-500/60 text-emerald-200"
+                          : "bg-cyan-500/15 border-cyan-500/60 text-cyan-200"
                         : "bg-zinc-900/60 border-zinc-800 hover:bg-zinc-800/80 text-zinc-300"
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <div
-                        className="w-2 h-2 rounded-full shrink-0 bg-emerald-400 animate-pulse"
+                        className={`w-2 h-2 rounded-full shrink-0 animate-pulse ${
+                          isSrcVisitor ? "bg-emerald-400" : "bg-cyan-400"
+                        }`}
                       />
                       <div className="min-w-0">
-                        <div className="text-xs font-bold truncate">{src.label}</div>
-                        <div className="text-[10px] text-zinc-500 truncate">{src.resolution} • {src.sensorSpec}</div>
+                        <div className="text-xs font-bold truncate flex items-center gap-1.5">
+                          {isSrcVisitor && <User className="w-3 h-3 text-emerald-400 shrink-0" />}
+                          <span className="truncate">{src.label}</span>
+                          {src.isSelf && (
+                            <span className="text-[9px] px-1 bg-cyan-950 text-cyan-300 rounded border border-cyan-500/40">
+                              YOU
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-zinc-500 truncate">
+                          {src.resolution} • {src.sensorSpec}
+                        </div>
                       </div>
                     </div>
-                    {isSelected && <Check className="w-3.5 h-3.5 text-cyan-400 shrink-0" />}
+                    {isSelected && (
+                      <Check
+                        className={`w-3.5 h-3.5 shrink-0 ${
+                          isSrcVisitor ? "text-emerald-400" : "text-cyan-400"
+                        }`}
+                      />
+                    )}
                   </button>
                 );
               })
@@ -454,13 +592,13 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
         {/* REAL-TIME DATA OVERLAY HUD COMPONENT */}
         <div className="absolute inset-0 pointer-events-none p-3 flex flex-col justify-between z-10">
           {/* Top Real-time telemetry row or full overlay */}
-          {hudMode === "full" && (
+          {!isVisitorFeed && hudMode === "full" && (
             <div className="w-full">
               <DroneDataOverlay drone={matchedDrone} compact={false} showFullHud={dimensions.height > 300} />
             </div>
           )}
 
-          {hudMode === "compact" && (
+          {!isVisitorFeed && hudMode === "compact" && (
             <div className="w-full">
               <DroneDataOverlay drone={matchedDrone} compact={true} />
             </div>
@@ -472,7 +610,7 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
                 <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
                 <span>REC {formatRecTime(recSeconds)}</span>
               </div>
-              {matchedDrone && (
+              {!isVisitorFeed && matchedDrone && (
                 <div className="bg-black/60 px-2 py-0.5 rounded border border-cyan-500/30">
                   <span>ALT {matchedDrone.telemetry.altitude}m</span>
                 </div>
@@ -553,3 +691,4 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
 
   return content;
 }
+

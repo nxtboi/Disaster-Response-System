@@ -497,7 +497,6 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
             </div>
             <div class="absolute -bottom-5 whitespace-nowrap px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-zinc-950/90 text-amber-300 border border-amber-500/50 shadow-md flex items-center gap-1">
               <span>${wp.name}</span>
-              <span class="text-zinc-400">(${wp.altitude}m)</span>
             </div>
           </div>
         `,
@@ -510,34 +509,21 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
         marker = L.marker(latLng, { icon: wpIcon, zIndexOffset: isSurvivorDistress ? 1500 : 800 }).addTo(map);
         marker.on('click', (ev: L.LeafletMouseEvent) => {
           L.DomEvent.stopPropagation(ev);
-          if (selectedWaypointIdRef.current === wp.id) {
-            removeWaypoint(wp.id);
-            setSelectedWaypointId(null);
-            setWaypointPlacedToast(`Deleted ${wp.name}`);
-            setTimeout(() => setWaypointPlacedToast(null), 3000);
-          } else {
-            setSelectedWaypointId(wp.id);
-            setWaypointPlacedToast(`Selected ${wp.name} (Click marker again to delete)`);
-            setTimeout(() => setWaypointPlacedToast(null), 3000);
-          }
+          setSelectedWaypointId(wp.id);
+          setWaypointPlacedToast(`Selected ${wp.name}`);
+          setTimeout(() => setWaypointPlacedToast(null), 2500);
         });
 
         marker.bindPopup(`
-          <div class="font-mono text-xs text-zinc-200 min-w-[180px]">
-            <div class="font-bold ${isSurvivorDistress ? 'text-rose-400' : 'text-amber-400'} flex items-center justify-between gap-2 border-b border-zinc-800 pb-1 mb-1.5">
-              <span>${isSurvivorDistress ? '🚨 ' : 'WP-' + String(wp.index).padStart(2, '0') + ': '}${wp.name}</span>
-              <span class="text-[9px] px-1.5 py-0.5 rounded ${isSurvivorDistress ? 'bg-rose-950/90 border border-rose-500/50 text-rose-300' : 'bg-amber-950/80 border border-amber-500/40 text-amber-300'}">${isSurvivorDistress ? 'AI VOICE PIN' : wp.action}</span>
+          <div class="font-mono text-[11px] text-zinc-200 min-w-[130px] p-0.5">
+            <div class="font-bold ${isSurvivorDistress ? 'text-rose-400' : 'text-amber-400'} flex items-center justify-between gap-1.5 border-b border-zinc-800/80 pb-1 mb-1">
+              <span class="truncate">${isSurvivorDistress ? '🚨 ' : 'WP-' + String(wp.index).padStart(2, '0') + ': '}${wp.name}</span>
+              <span class="text-[8px] px-1 py-0.2 rounded ${isSurvivorDistress ? 'bg-rose-950/90 text-rose-300' : 'bg-amber-950/80 text-amber-300'}">${isSurvivorDistress ? 'PIN' : wp.action}</span>
             </div>
-            <div class="space-y-1 text-[11px] text-zinc-300 mb-2">
-              <div><span class="text-zinc-500">COORDS:</span> ${wp.coordinates.lat.toFixed(5)}, ${wp.coordinates.lng.toFixed(5)}</div>
-              <div><span class="text-zinc-500">ALTITUDE:</span> <span class="text-cyan-400">${wp.altitude}m</span></div>
-              <div><span class="text-zinc-500">TARGET SPD:</span> ${wp.speed || 35} km/h</div>
+            <div class="text-[10px] text-zinc-400 flex items-center justify-between">
+              <span>POS:</span>
+              <span class="text-zinc-200">${wp.coordinates.lat.toFixed(4)}, ${wp.coordinates.lng.toFixed(4)}</span>
             </div>
-            ${isSurvivorDistress ? `
-              <div class="text-[10px] text-rose-200/90 bg-rose-950/40 p-1.5 rounded border border-rose-500/30">
-                Acoustic localized survivor distress pinpoint.
-              </div>
-            ` : ''}
           </div>
         `, { className: 'drs-popup', closeButton: false });
 
@@ -742,15 +728,15 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
 
       {/* Selected Waypoint On-Map Action Card */}
       {selectedWaypoint && (
-        <div className="absolute bottom-6 left-6 z-[400] w-72 bg-zinc-950/95 border border-amber-500/60 p-3 rounded-2xl shadow-[0_0_30px_rgba(0,0,0,0.8)] backdrop-blur-xl flex flex-col gap-2.5 font-mono">
-          <div className="flex items-center justify-between gap-2 border-b border-zinc-800 pb-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-6 h-6 rounded-lg bg-amber-400 text-black font-extrabold flex items-center justify-center text-xs shrink-0 shadow-sm">
+        <div className="absolute bottom-6 left-6 z-[400] w-60 bg-zinc-950/95 border border-amber-500/60 p-2.5 rounded-xl shadow-[0_0_25px_rgba(0,0,0,0.8)] backdrop-blur-xl flex flex-col gap-2 font-mono">
+          <div className="flex items-center justify-between gap-1.5 border-b border-zinc-800 pb-1.5">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <div className="w-5 h-5 rounded-md bg-amber-400 text-black font-extrabold flex items-center justify-center text-[11px] shrink-0 shadow-sm">
                 {String(selectedWaypoint.index).padStart(2, "0")}
               </div>
               <div className="min-w-0">
                 <div className="font-bold text-xs text-zinc-100 truncate">{selectedWaypoint.name}</div>
-                <div className="text-[10px] text-amber-400">{selectedWaypoint.action} • {selectedWaypoint.altitude}m alt</div>
+                <div className="text-[9px] text-amber-400">{selectedWaypoint.action}</div>
               </div>
             </div>
             <button
@@ -763,19 +749,19 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
           </div>
 
           <div className="text-[10px] text-zinc-400 flex items-center justify-between">
-            <span>COORDS:</span>
-            <span className="text-zinc-200">{selectedWaypoint.coordinates.lat.toFixed(5)}°, {selectedWaypoint.coordinates.lng.toFixed(5)}°</span>
+            <span>POS:</span>
+            <span className="text-zinc-200">{selectedWaypoint.coordinates.lat.toFixed(4)}°, {selectedWaypoint.coordinates.lng.toFixed(4)}°</span>
           </div>
 
-          <div className="flex items-center gap-2 pt-0.5">
+          <div className="flex items-center gap-1.5 pt-0.5">
             {selectedDrone && (
               <button
                 onClick={() => sendDroneToWaypoint(selectedDrone.id, selectedWaypoint.id)}
-                className="flex-1 py-1.5 px-2 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                className="flex-1 py-1 px-2 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 rounded-md text-[11px] font-bold flex items-center justify-center gap-1 transition-colors"
                 title={`Fly ${selectedDrone.name} to this waypoint`}
               >
-                <Navigation className="w-3.5 h-3.5" />
-                <span>Fly Drone</span>
+                <Navigation className="w-3 h-3" />
+                <span>Fly</span>
               </button>
             )}
             <button
@@ -785,10 +771,10 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
                 setWaypointPlacedToast(`Deleted ${selectedWaypoint.name}`);
                 setTimeout(() => setWaypointPlacedToast(null), 3000);
               }}
-              className="py-1.5 px-3 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/50 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+              className="py-1 px-2.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/50 rounded-md text-[11px] font-bold flex items-center justify-center gap-1 transition-colors"
               title="Delete this waypoint"
             >
-              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+              <Trash2 className="w-3 h-3 text-rose-400" />
               <span>Delete</span>
             </button>
           </div>

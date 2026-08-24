@@ -3,7 +3,7 @@ import { motion } from "motion/react";
 import { ShieldAlert, Crosshair, Lock, User, KeyRound, Loader2 } from "lucide-react";
 import droneImage from "../assets/images/drone_landing_hero_1787467797692.jpg";
 
-export function LoginPage({ onLogin }: { onLogin: (role: "admin" | "operator") => void }) {
+export function LoginPage({ onLogin }: { onLogin: (role: "admin" | "operator", username: string) => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isAuthenticating, setIsAuthenticating] = useState(false);
@@ -19,13 +19,14 @@ export function LoginPage({ onLogin }: { onLogin: (role: "admin" | "operator") =
     setError(false);
     setIsAuthenticating(true);
 
-    const isAdmin = username.trim().toLowerCase() === "admin" && password === "Vijay@147896";
+    const cleanUsername = username.trim();
+    const isAdmin = cleanUsername.toLowerCase() === "admin" && password === "Vijay@147896";
     const role: "admin" | "operator" = isAdmin ? "admin" : "operator";
     
     // Simulate swift secure authentication
     setTimeout(() => {
       setIsAuthenticating(false);
-      onLogin(role);
+      onLogin(role, cleanUsername);
     }, 800);
   };
 

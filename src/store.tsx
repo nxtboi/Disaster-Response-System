@@ -9,6 +9,11 @@ export interface UserLocation {
   timestamp?: number;
 }
 
+export interface UserAccount {
+  username: string;
+  role: "admin" | "operator";
+}
+
 interface DRSContextType {
   drones: Drone[];
   selectedDroneId: string | null;
@@ -26,6 +31,9 @@ interface DRSContextType {
   deployFleetToLocation: (lat: number, lng: number) => void;
   centerMapTarget: { lat: number; lng: number; zoom?: number; timestamp: number } | null;
   setCenterMapTarget: (target: { lat: number; lng: number; zoom?: number; timestamp: number } | null) => void;
+  // User Account Context
+  currentUser: UserAccount;
+  setCurrentUser: (user: UserAccount) => void;
   // Status Panel Visibility
   isStatusPanelVisible: boolean;
   setIsStatusPanelVisible: (visible: boolean) => void;
@@ -49,6 +57,67 @@ interface DRSContextType {
   addAlert: (droneId: string, message: string) => void;
 }
 
+const DEFAULT_WAYPOINTS: TacticalWaypoint[] = [
+  {
+    id: "wp-1",
+    index: 1,
+    name: "Alpha Point",
+    coordinates: { lat: 28.4610, lng: 77.0240 },
+    altitude: 120,
+    speed: 35,
+    action: "Fly-Through",
+    assignedDroneId: "DRN-01",
+    createdAt: Date.now() - 120000,
+  },
+  {
+    id: "wp-2",
+    index: 2,
+    name: "Bravo Sector",
+    coordinates: { lat: 28.4645, lng: 77.0295 },
+    altitude: 90,
+    speed: 25,
+    action: "Hover & Scan",
+    assignedDroneId: "DRN-01",
+    createdAt: Date.now() - 60000,
+  },
+  {
+    id: "wp-3",
+    index: 3,
+    name: "Charlie Perim",
+    coordinates: { lat: 28.4580, lng: 77.0320 },
+    altitude: 100,
+    speed: 40,
+    action: "Reconnaissance",
+    assignedDroneId: "DRN-01",
+    createdAt: Date.now() - 30000,
+  },
+];
+
+function getStoredWaypoints(username: string): TacticalWaypoint[] {
+  try {
+    const key = `drs_waypoints_v2_${(username || "operator").trim().toLowerCase()}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    }
+  } catch (err) {
+    console.error("Error reading waypoints from localStorage:", err);
+  }
+  return DEFAULT_WAYPOINTS;
+}
+
+function saveStoredWaypoints(username: string, waypointsList: TacticalWaypoint[]) {
+  try {
+    const key = `drs_waypoints_v2_${(username || "operator").trim().toLowerCase()}`;
+    localStorage.setItem(key, JSON.stringify(waypointsList));
+  } catch (err) {
+    console.error("Error saving waypoints to localStorage:", err);
+  }
+}
+
 function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371; // Earth's radius in km
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -66,6 +135,14 @@ function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: num
 const DRSContext = createContext<DRSContextType | undefined>(undefined);
 
 export function DRSProvider({ children }: { children: ReactNode }) {
+  const [currentUser, setCurrentUser] = useState<UserAccount>(() => {
+    try {
+      const saved = localStorage.getItem("drs_current_user");
+      if (saved) return JSON.parse(saved);
+    } catch (_) {}
+    return { username: "operator", role: "operator" };
+  });
+
   const [drones, setDrones] = useState<Drone[]>(MOCK_DRONES);
   const [selectedDroneId, setSelectedDroneId] = useState<string | null>("DRN-01");
   const [activeView, setActiveView] = useState("Dashboard");
@@ -77,44 +154,30 @@ export function DRSProvider({ children }: { children: ReactNode }) {
 
   const toggleStatusPanel = () => setIsStatusPanelVisible((prev) => !prev);
 
-  // Tactical Waypoints State
-  const [waypoints, setWaypoints] = useState<TacticalWaypoint[]>([
-    {
-      id: "wp-1",
-      index: 1,
-      name: "Alpha Point",
-      coordinates: { lat: 28.4610, lng: 77.0240 },
-      altitude: 120,
-      speed: 35,
-      action: "Fly-Through",
-      assignedDroneId: "DRN-01",
-      createdAt: Date.now() - 120000,
-    },
-    {
-      id: "wp-2",
-      index: 2,
-      name: "Bravo Sector",
-      coordinates: { lat: 28.4645, lng: 77.0295 },
-      altitude: 90,
-      speed: 25,
-      action: "Hover & Scan",
-      assignedDroneId: "DRN-01",
-      createdAt: Date.now() - 60000,
-    },
-    {
-      id: "wp-3",
-      index: 3,
-      name: "Charlie Perim",
-      coordinates: { lat: 28.4580, lng: 77.0320 },
-      altitude: 100,
-      speed: 40,
-      action: "Reconnaissance",
-      assignedDroneId: "DRN-01",
-      createdAt: Date.now() - 30000,
-    },
-  ]);
+  // Tactical Waypoints State - Persisted per user account
+  const [waypoints, setWaypoints] = useState<TacticalWaypoint[]>(() => {
+    return getStoredWaypoints(currentUser.username);
+  });
   const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(null);
   const [isPlacingWaypoint, setIsPlacingWaypoint] = useState(false);
+
+  // Sync waypoints and storage on account switch
+  useEffect(() => {
+    if (currentUser?.username) {
+      try {
+        localStorage.setItem("drs_current_user", JSON.stringify(currentUser));
+      } catch (_) {}
+      const loaded = getStoredWaypoints(currentUser.username);
+      setWaypoints(loaded);
+    }
+  }, [currentUser?.username]);
+
+  // Persist waypoints whenever they change
+  useEffect(() => {
+    if (currentUser?.username) {
+      saveStoredWaypoints(currentUser.username, waypoints);
+    }
+  }, [waypoints, currentUser?.username]);
 
   const addWaypoint = (coords: DroneCoordinates, options?: Partial<TacticalWaypoint>): TacticalWaypoint => {
     const nextIndex = waypoints.length + 1;
@@ -133,7 +196,13 @@ export function DRSProvider({ children }: { children: ReactNode }) {
       createdAt: Date.now(),
     };
 
-    setWaypoints((prev) => [...prev, newWp]);
+    setWaypoints((prev) => {
+      const updated = [...prev, newWp];
+      if (currentUser?.username) {
+        saveStoredWaypoints(currentUser.username, updated);
+      }
+      return updated;
+    });
     setSelectedWaypointId(newWp.id);
     return newWp;
   };
@@ -141,8 +210,11 @@ export function DRSProvider({ children }: { children: ReactNode }) {
   const removeWaypoint = (id: string) => {
     setWaypoints((prev) => {
       const filtered = prev.filter((w) => w.id !== id);
-      // Re-index remaining waypoints
-      return filtered.map((w, idx) => ({ ...w, index: idx + 1 }));
+      const updated = filtered.map((w, idx) => ({ ...w, index: idx + 1 }));
+      if (currentUser?.username) {
+        saveStoredWaypoints(currentUser.username, updated);
+      }
+      return updated;
     });
     if (selectedWaypointId === id) {
       setSelectedWaypointId(null);
@@ -150,14 +222,21 @@ export function DRSProvider({ children }: { children: ReactNode }) {
   };
 
   const updateWaypoint = (id: string, updates: Partial<TacticalWaypoint>) => {
-    setWaypoints((prev) =>
-      prev.map((w) => (w.id === id ? { ...w, ...updates } : w))
-    );
+    setWaypoints((prev) => {
+      const updated = prev.map((w) => (w.id === id ? { ...w, ...updates } : w));
+      if (currentUser?.username) {
+        saveStoredWaypoints(currentUser.username, updated);
+      }
+      return updated;
+    });
   };
 
   const clearWaypoints = () => {
     setWaypoints([]);
     setSelectedWaypointId(null);
+    if (currentUser?.username) {
+      saveStoredWaypoints(currentUser.username, []);
+    }
   };
 
   const sendDroneToWaypoint = (droneId: string, waypointId: string) => {
@@ -530,6 +609,8 @@ export function DRSProvider({ children }: { children: ReactNode }) {
         deployFleetToLocation,
         centerMapTarget,
         setCenterMapTarget,
+        currentUser,
+        setCurrentUser,
         isStatusPanelVisible,
         setIsStatusPanelVisible,
         toggleStatusPanel,

@@ -8,6 +8,7 @@ export type LensType =
   | "wide-360"
   | "lidar-pointcloud"
   | "device-webcam"
+  | "visitor-camera"
   | "ground-cctv";
 
 export type VisionMode = "normal" | "nvg" | "thermal" | "mono";
@@ -15,7 +16,7 @@ export type VisionMode = "normal" | "nvg" | "thermal" | "mono";
 export type CameraLayoutMode = "1x1" | "1x2" | "2x2" | "1+3" | "3x2" | "3x3";
 
 export interface CameraSourceInfo {
-  id: string; // e.g. "DRN-01-rgb-gimbal" or "ground-dock" or "device-webcam"
+  id: string; // e.g. "DRN-01-rgb-gimbal" or "ground-dock" or "device-webcam" or "visitor-field-01"
   deviceId?: string; // Optional physical WebRTC deviceId
   label: string;
   shortLabel: string;
@@ -27,6 +28,14 @@ export interface CameraSourceInfo {
   fov: string;
   status: "ONLINE" | "STANDBY" | "OFFLINE";
   sensorSpec: string;
+  visitorId?: string;
+  visitorName?: string;
+  visitorRole?: string;
+  visitorLocation?: string;
+  visitorLatency?: number;
+  visitorBattery?: number;
+  isSelf?: boolean;
+  stream?: MediaStream;
 }
 
 export interface WindowSlotConfig {
@@ -81,9 +90,15 @@ export const AUXILIARY_CAMERAS: CameraSourceInfo[] = [
 export function getAvailableCameraSources(
   drones: Drone[],
   hardwareDevices?: MediaDeviceInfo[],
-  onlyAvailable: boolean = false
+  onlyAvailable: boolean = false,
+  visitorSources?: CameraSourceInfo[]
 ): CameraSourceInfo[] {
   const sources: CameraSourceInfo[] = [];
+
+  // Add visitor and field operator cameras first or alongside
+  if (visitorSources && visitorSources.length > 0) {
+    sources.push(...visitorSources);
+  }
 
   // Add all drone-mounted cameras
   drones.forEach((drone) => {

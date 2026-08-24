@@ -137,6 +137,16 @@ const DRSContext = createContext<DRSContextType | undefined>(undefined);
 export function DRSProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<UserAccount>(() => {
     try {
+      const auth = localStorage.getItem("drs_auth_session");
+      if (auth) {
+        const parsed = JSON.parse(auth);
+        if (parsed?.isAuthenticated && parsed?.username) {
+          return {
+            username: parsed.username,
+            role: parsed.role === "admin" ? "admin" : "operator",
+          };
+        }
+      }
       const saved = localStorage.getItem("drs_current_user");
       if (saved) return JSON.parse(saved);
     } catch (_) {}

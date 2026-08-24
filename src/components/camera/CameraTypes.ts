@@ -35,6 +35,7 @@ export interface CameraSourceInfo {
   visitorLatency?: number;
   visitorBattery?: number;
   isSelf?: boolean;
+  isRoot?: boolean;
   isRealDevice?: boolean;
   hasLiveFrame?: boolean;
   stream?: MediaStream;
@@ -97,12 +98,44 @@ export function getAvailableCameraSources(
 ): CameraSourceInfo[] {
   const sources: CameraSourceInfo[] = [];
 
-  // Add visitor and field operator cameras first or alongside
-  if (visitorSources && visitorSources.length > 0) {
-    sources.push(...visitorSources);
+  // 1. ROOT DEVICE CAMERA (Always Index 0 - Local Operator / This Device)
+  const selfVisitorSource = visitorSources?.find((v) => v.isSelf);
+  if (selfVisitorSource) {
+    sources.push({
+      ...selfVisitorSource,
+      isRoot: true,
+      label: `★ ROOT DEVICE • ${selfVisitorSource.visitorName || "This Device (YOU)"}`,
+      shortLabel: `[ROOT] THIS DEVICE`,
+    });
+  } else {
+    // Default Operator Cam entry as Root Device
+    const rootDevName = (hardwareDevices && hardwareDevices.length > 0 && hardwareDevices[0].label)
+      ? hardwareDevices[0].label
+      : "Host Camera Sensor";
+    sources.push({
+      id: "device-webcam",
+      deviceId: hardwareDevices && hardwareDevices.length > 0 ? hardwareDevices[0].deviceId : undefined,
+      label: `★ ROOT DEVICE • ${rootDevName} (YOU)`,
+      shortLabel: `[ROOT] THIS DEVICE`,
+      lensType: "device-webcam",
+      lensName: "Root Camera Sensor",
+      resolution: "1080p 60FPS",
+      fov: "84° Wide Optical",
+      status: "ONLINE",
+      sensorSpec: "Direct Hardware WebRTC Root Host Stream",
+      isSelf: true,
+      isRoot: true,
+      isRealDevice: true,
+    });
   }
 
-  // Add all drone-mounted cameras
+  // 2. Other Connected Visitors & Remote Devices
+  if (visitorSources && visitorSources.length > 0) {
+    const otherVisitors = visitorSources.filter((v) => !v.isSelf);
+    sources.push(...otherVisitors);
+  }
+
+  // 3. Drone-Mounted Cameras
   drones.forEach((drone) => {
     const isDroneAvailable =
       drone.status === "Online" &&
@@ -205,14 +238,14 @@ export function getAvailableCameraSources(
     });
   });
 
-  // Physical Webcams / Connected Video Devices
-  if (hardwareDevices && hardwareDevices.length > 0) {
-    hardwareDevices.forEach((dev, idx) => {
-      const devName = dev.label || `Device Camera ${idx + 1}`;
+  // 4. Extra Physical Hardware Webcams (if multiple plugged in)
+  if (hardwareDevices && hardwareDevices.length > 1) {
+    hardwareDevices.slice(1).forEach((dev, idx) => {
+      const devName = dev.label || `Device Camera ${idx + 2}`;
       sources.push({
-        id: dev.deviceId ? `device-webcam-${dev.deviceId}` : `device-webcam-${idx}`,
+        id: dev.deviceId ? `device-webcam-${dev.deviceId}` : `device-webcam-${idx + 1}`,
         deviceId: dev.deviceId,
-        label: `Local • ${devName}`,
+        label: `Local Hardware • ${devName}`,
         shortLabel: devName.length > 15 ? `${devName.slice(0, 14)}…` : devName.toUpperCase(),
         lensType: "device-webcam",
         lensName: devName,
@@ -220,24 +253,12 @@ export function getAvailableCameraSources(
         fov: "84° Wide",
         status: "ONLINE",
         sensorSpec: "Direct Hardware WebRTC Feed",
+        isSelf: true,
       });
-    });
-  } else {
-    // Default Operator Cam entry
-    sources.push({
-      id: "device-webcam",
-      label: "Operator Live Device Webcam",
-      shortLabel: "OPERATOR CAM",
-      lensType: "device-webcam",
-      lensName: "Local Sensor",
-      resolution: "1080p 60FPS",
-      fov: "84° Wide",
-      status: "ONLINE",
-      sensorSpec: "Direct WebRTC Optical Feed",
     });
   }
 
-  // Base Station and Perimeter CCTVs
+  // 5. Base Station and Perimeter CCTVs
   sources.push(
     {
       id: "ground-dock-01",

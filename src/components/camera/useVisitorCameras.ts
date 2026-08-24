@@ -122,8 +122,33 @@ function detectDeviceLabel(): string {
 
 const MY_DEVICE_ID = getOrCreateDeviceId();
 
+function createRootSelfNode(currentUsername: string, localStream: MediaStream | null, isBroadcasting: boolean): VisitorCameraNode {
+  return {
+    id: `visitor-self-${MY_DEVICE_ID}`,
+    visitorId: `ROOT-${MY_DEVICE_ID.toUpperCase().slice(-6)}`,
+    visitorName: `★ Root Device (${currentUsername || "Operator"})`,
+    visitorRole: isBroadcasting ? "Active Root Broadcaster" : "Root Host / Primary Device",
+    visitorLocation: "Host Console (Root)",
+    resolution: "1080p 60FPS",
+    fov: "84° Wide Optical",
+    status: "ONLINE",
+    sensorSpec: `${detectDeviceLabel()} • Direct Root WebRTC Sensor`,
+    latencyMs: 0,
+    battery: 100,
+    isSelf: true,
+    isRealDevice: true,
+    streamType: "live-stream",
+    stream: localStream,
+    lastSeen: Date.now(),
+    hasLiveFrame: isBroadcasting,
+  };
+}
+
 export function useVisitorCameras(currentUsername: string = "Operator") {
-  const [visitors, setVisitors] = useState<VisitorCameraNode[]>(DEFAULT_TACTICAL_VISITORS);
+  const [visitors, setVisitors] = useState<VisitorCameraNode[]>(() => [
+    createRootSelfNode(currentUsername, null, false),
+    ...DEFAULT_TACTICAL_VISITORS,
+  ]);
   const [isBroadcasting, setIsBroadcasting] = useState<boolean>(false);
   const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -140,6 +165,22 @@ export function useVisitorCameras(currentUsername: string = "Operator") {
     isBroadcastingRef.current = isBroadcasting;
   }, [isBroadcasting]);
 
+  // Helper to ensure root self node is always at index 0
+  const mergeWithRootSelf = useCallback(
+    (nodeList: VisitorCameraNode[]) => {
+      const rootNode = createRootSelfNode(
+        currentUsername,
+        localStream,
+        isBroadcastingRef.current
+      );
+      const withoutSelf = nodeList.filter(
+        (v) => v.id !== `visitor-self-${MY_DEVICE_ID}` && !v.isSelf
+      );
+      return [rootNode, ...(withoutSelf.length > 0 ? withoutSelf : DEFAULT_TACTICAL_VISITORS)];
+    },
+    [currentUsername, localStream]
+  );
+
   // Fetch active visitors from server
   const fetchServerVisitors = useCallback(async () => {
     try {
@@ -147,53 +188,19 @@ export function useVisitorCameras(currentUsername: string = "Operator") {
       if (!res.ok) return;
       const data = await res.json();
       if (data && Array.isArray(data.visitors)) {
-        setVisitors((prev) => {
-          // Merge server visitors with local self node
+        setVisitors(() => {
           const serverList: VisitorCameraNode[] = data.visitors.map((v: any) => ({
             ...v,
             isSelf: v.id === `visitor-self-${MY_DEVICE_ID}`,
             stream: v.id === `visitor-self-${MY_DEVICE_ID}` ? localStream : undefined,
           }));
-
-          // Preserve self node if currently broadcasting
-          if (isBroadcastingRef.current) {
-            const hasSelf = serverList.some((v) => v.id === `visitor-self-${MY_DEVICE_ID}`);
-            if (!hasSelf) {
-              const selfNode: VisitorCameraNode = {
-                id: `visitor-self-${MY_DEVICE_ID}`,
-                visitorId: `DEV-${MY_DEVICE_ID.toUpperCase().slice(-6)}`,
-                visitorName: `${currentUsername} (${detectDeviceLabel()})`,
-                visitorRole: "Live Field Unit / Operator",
-                visitorLocation: "Live Remote Station",
-                resolution: "1080p 60FPS",
-                fov: "84° Wide",
-                status: "ONLINE",
-                sensorSpec: "Direct Hardware WebRTC Camera Stream",
-                latencyMs: 12,
-                battery: 100,
-                isSelf: true,
-                isRealDevice: true,
-                streamType: "live-stream",
-                stream: localStream,
-                lastSeen: Date.now(),
-                hasLiveFrame: true,
-              };
-              return [selfNode, ...serverList];
-            }
-          }
-
-          // If empty, return default tactical
-          if (serverList.length === 0) {
-            return DEFAULT_TACTICAL_VISITORS;
-          }
-
-          return serverList;
+          return mergeWithRootSelf(serverList);
         });
       }
     } catch {
       // Fallback
     }
-  }, [localStream, currentUsername]);
+  }, [localStream, mergeWithRootSelf]);
 
   // Server-Sent Events (SSE) for Real-Time Cross-Device Sync
   useEffect(() => {
@@ -207,26 +214,20 @@ export function useVisitorCameras(currentUsername: string = "Operator") {
         try {
           const data = JSON.parse(event.data);
           if (data && Array.isArray(data.visitors)) {
-            setVisitors(
-              data.visitors.map((v: any) => ({
-                ...v,
-                isSelf: v.id === `visitor-self-${MY_DEVICE_ID}`,
-                stream: v.id === `visitor-self-${MY_DEVICE_ID}` ? localStream : undefined,
-              }))
-            );
+            const serverList: VisitorCameraNode[] = data.visitors.map((v: any) => ({
+              ...v,
+              isSelf: v.id === `visitor-self-${MY_DEVICE_ID}`,
+              stream: v.id === `visitor-self-${MY_DEVICE_ID}` ? localStream : undefined,
+            }));
+            setVisitors(mergeWithRootSelf(serverList));
           } else if (data && data.node) {
             setVisitors((prev) => {
-              const existingIdx = prev.findIndex((v) => v.id === data.node.id);
+              const withoutTarget = prev.filter((v) => v.id !== data.node.id);
               const nodeWithSelf = {
                 ...data.node,
                 isSelf: data.node.id === `visitor-self-${MY_DEVICE_ID}`,
               };
-              if (existingIdx >= 0) {
-                const copy = [...prev];
-                copy[existingIdx] = nodeWithSelf;
-                return copy;
-              }
-              return [nodeWithSelf, ...prev];
+              return mergeWithRootSelf([nodeWithSelf, ...withoutTarget]);
             });
           }
         } catch {}
@@ -529,24 +530,25 @@ export function useVisitorCameras(currentUsername: string = "Operator") {
   // Convert VisitorCameraNode[] to standard CameraSourceInfo[]
   const visitorSources: CameraSourceInfo[] = visitors.map((v) => ({
     id: v.id,
-    label: v.isSelf ? `My Camera • ${v.visitorName}` : `Visitor • ${v.visitorName}`,
-    shortLabel: v.visitorName.length > 18 ? `${v.visitorName.slice(0, 17)}…` : v.visitorName.toUpperCase(),
+    label: v.isSelf ? `★ ROOT DEVICE • ${v.visitorName}` : `Visitor • ${v.visitorName}`,
+    shortLabel: v.isSelf ? `[ROOT] THIS DEVICE` : (v.visitorName.length > 18 ? `${v.visitorName.slice(0, 17)}…` : v.visitorName.toUpperCase()),
     lensType: "visitor-camera",
-    lensName: v.visitorRole,
+    lensName: v.isSelf ? "Root Camera Feed" : v.visitorRole,
     resolution: v.resolution,
     fov: v.fov,
     status: v.status,
-    sensorSpec: `${v.sensorSpec} • ${v.latencyMs}ms Mesh`,
+    sensorSpec: `${v.sensorSpec}${v.isSelf ? " • Primary Root Sensor" : ` • ${v.latencyMs}ms Mesh`}`,
     visitorId: v.visitorId,
     visitorName: v.visitorName,
     visitorRole: v.visitorRole,
     visitorLocation: v.visitorLocation,
-    visitorLatency: v.latencyMs,
+    visitorLatency: v.isSelf ? 0 : v.latencyMs,
     visitorBattery: v.battery,
     isSelf: v.isSelf,
+    isRoot: v.isSelf,
     isRealDevice: v.isRealDevice,
     hasLiveFrame: v.hasLiveFrame,
-    stream: v.stream || undefined,
+    stream: v.stream || (v.isSelf && localStream ? localStream : undefined),
   }));
 
   const realDeviceCount = visitors.filter((v) => v.isRealDevice && v.status === "ONLINE").length;

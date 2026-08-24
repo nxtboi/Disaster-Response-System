@@ -30,6 +30,12 @@ import {
   Layers,
   Video,
   Activity,
+  Radio,
+  Users,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight,
+  Share2,
 } from "lucide-react";
 
 interface CameraWindowProps {
@@ -47,7 +53,22 @@ export function CameraWindow({
   onUpdateConfig,
   onToggleFocus,
 }: CameraWindowProps) {
-  const { sources: availableSources, allSources, activeVisitorCount } = useCameraSources(drones, true);
+  const {
+    sources: availableSources,
+    allSources,
+    visitors,
+    visitorSources,
+    isBroadcasting,
+    startBroadcasting,
+    stopBroadcasting,
+    toggleBroadcasting,
+    switchCameraFacing,
+    facingMode,
+    activeVisitorCount,
+    realDeviceCount,
+    myDeviceId,
+  } = useCameraSources(drones, true);
+
   const activeSource =
     availableSources.find((s) => s.id === config.cameraSourceId) ||
     allSources.find((s) => s.id === config.cameraSourceId) ||
@@ -104,6 +125,26 @@ export function CameraWindow({
     return true;
   });
 
+  // Visitor quick cycle helper
+  const allVisitorList = availableSources.filter((s) => s.lensType === "visitor-camera");
+  const currentVisitorIdx = allVisitorList.findIndex((s) => s.id === activeSource?.id);
+
+  const cycleVisitor = (direction: "next" | "prev") => {
+    if (allVisitorList.length === 0) return;
+    if (currentVisitorIdx === -1) {
+      onUpdateConfig(config.slotId, { cameraSourceId: allVisitorList[0].id });
+      return;
+    }
+    const nextIdx =
+      direction === "next"
+        ? (currentVisitorIdx + 1) % allVisitorList.length
+        : (currentVisitorIdx - 1 + allVisitorList.length) % allVisitorList.length;
+    onUpdateConfig(config.slotId, { cameraSourceId: allVisitorList[nextIdx].id });
+  };
+
+  const isCurrentVisitorFeed = activeSource?.lensType === "visitor-camera";
+  const isRootOrSelf = activeSource?.isRoot || activeSource?.isSelf;
+
   return (
     <div className="w-full h-full bg-zinc-950 border border-zinc-800/80 rounded-xl overflow-hidden shadow-2xl flex flex-col relative group/win transition-all select-none">
       {/* Flash Effect on Snapshot */}
@@ -113,17 +154,29 @@ export function CameraWindow({
 
       {/* Window Top Control Bar */}
       <div className="px-3 py-2 bg-zinc-900/90 border-b border-zinc-800/80 flex items-center justify-between gap-2 z-30 font-mono">
-        {/* Left: Camera Selector Dropdown */}
-        <div className="relative flex items-center gap-2 min-w-0">
+        {/* Left: Camera Selector Dropdown + Quick Visitor Navigator */}
+        <div className="relative flex items-center gap-1.5 min-w-0">
           <button
             onClick={() => {
               setIsSelectorOpen(!isSelectorOpen);
               setIsFiltersOpen(false);
             }}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-800/90 hover:bg-zinc-700/90 border border-zinc-700/80 text-zinc-200 text-xs font-bold transition-colors truncate max-w-[210px]"
-            title="Click to switch camera source or lens"
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-bold transition-colors truncate max-w-[210px] ${
+              isRootOrSelf
+                ? "bg-emerald-950/80 border-emerald-500/50 text-emerald-200 hover:bg-emerald-900/80"
+                : isCurrentVisitorFeed
+                ? "bg-cyan-950/80 border-cyan-500/50 text-cyan-200 hover:bg-cyan-900/80"
+                : "bg-zinc-800/90 hover:bg-zinc-700/90 border-zinc-700/80 text-zinc-200"
+            }`}
+            title="Click to switch camera source, view other visitors, or drones"
           >
-            <Video className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+            {isRootOrSelf ? (
+              <Radio className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            ) : isCurrentVisitorFeed ? (
+              <Users className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+            ) : (
+              <Video className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+            )}
             <span className="truncate">{activeSource.shortLabel}</span>
             <span className="text-[10px] text-cyan-400 shrink-0 font-normal">
               [{activeSource.lensName}]
@@ -131,15 +184,69 @@ export function CameraWindow({
             <ChevronDown className="w-3 h-3 text-zinc-400 shrink-0 ml-0.5" />
           </button>
 
+          {/* Quick cycle buttons for visitor cameras */}
+          {allVisitorList.length > 1 && (
+            <div className="hidden sm:flex items-center gap-0.5 bg-zinc-900 border border-zinc-800 rounded p-0.5 text-zinc-400">
+              <button
+                onClick={() => cycleVisitor("prev")}
+                className="p-0.5 hover:text-cyan-300 hover:bg-zinc-800 rounded"
+                title="Previous Visitor Camera"
+              >
+                <ChevronLeft className="w-3 h-3" />
+              </button>
+              <span className="text-[9px] px-1 font-bold text-zinc-400">
+                {currentVisitorIdx >= 0 ? `${currentVisitorIdx + 1}/${allVisitorList.length}` : `V-MESH`}
+              </span>
+              <button
+                onClick={() => cycleVisitor("next")}
+                className="p-0.5 hover:text-cyan-300 hover:bg-zinc-800 rounded"
+                title="Next Visitor Camera"
+              >
+                <ChevronRight className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+
           {/* REC Status Badge */}
-          <div className="hidden sm:flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-500/20 border border-rose-500/30 text-[9px] text-rose-400 font-bold">
+          <div className="hidden md:flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-500/20 border border-rose-500/30 text-[9px] text-rose-400 font-bold">
             <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping" />
             <span>LIVE</span>
           </div>
         </div>
 
-        {/* Right: Quick Action Controls */}
+        {/* Right: Quick Action Controls + Live Stream Broadcast Toggle */}
         <div className="flex items-center gap-1 text-zinc-400 shrink-0">
+          {/* Live Broadcast Button */}
+          <button
+            onClick={toggleBroadcasting}
+            className={`px-2 py-1 rounded text-xs flex items-center gap-1.5 border transition-all ${
+              isBroadcasting
+                ? "bg-rose-500/20 text-rose-300 border-rose-500/50 shadow-[0_0_10px_rgba(244,63,94,0.25)] font-bold animate-pulse"
+                : "bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border-emerald-500/40"
+            }`}
+            title={
+              isBroadcasting
+                ? "Live Streaming Active • Click to Stop Broadcasting"
+                : "Live Stream Your Camera • Allow all other visitors to view your feed"
+            }
+          >
+            <Radio className={`w-3.5 h-3.5 ${isBroadcasting ? "text-rose-400 animate-spin" : "text-emerald-400"}`} />
+            <span className="text-[10px] hidden sm:inline font-bold">
+              {isBroadcasting ? "BROADCASTING" : "LIVE STREAM"}
+            </span>
+          </button>
+
+          {/* Flip camera sensor if broadcasting */}
+          {isBroadcasting && (
+            <button
+              onClick={switchCameraFacing}
+              className="p-1 rounded text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700"
+              title={`Flip Camera (${facingMode === "user" ? "Front" : "Back/Environment"})`}
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-cyan-400" />
+            </button>
+          )}
+
           {/* Live Data Overlay HUD Toggle */}
           {matchedDrone && (
             <button
@@ -315,27 +422,43 @@ export function CameraWindow({
             <div className="flex items-center gap-2">
               <Layers className="w-4 h-4 text-cyan-400" />
               <span className="text-xs font-bold text-zinc-100 uppercase tracking-wider">
-                Select Available Camera Source
+                Select Camera Source
               </span>
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
                 {filteredSources.length} AVAILABLE
               </span>
             </div>
-            <button
-              onClick={() => setIsSelectorOpen(false)}
-              className="text-xs text-zinc-400 hover:text-zinc-100 p-1"
-            >
-              ✕
-            </button>
+
+            {/* Broadcast My Camera button inside selector header */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={toggleBroadcasting}
+                className={`px-2 py-0.5 rounded text-[10px] flex items-center gap-1 border transition-colors ${
+                  isBroadcasting
+                    ? "bg-rose-500/20 text-rose-300 border-rose-500/50 font-bold"
+                    : "bg-emerald-500/20 text-emerald-300 border-emerald-500/50 hover:bg-emerald-500/30"
+                }`}
+                title="Broadcast your camera as a live stream for other visitors"
+              >
+                <Radio className="w-3 h-3" />
+                <span>{isBroadcasting ? "Stop Live Stream" : "Live Stream My Camera"}</span>
+              </button>
+              <button
+                onClick={() => setIsSelectorOpen(false)}
+                className="text-xs text-zinc-400 hover:text-zinc-100 p-1"
+              >
+                ✕
+              </button>
+            </div>
           </div>
 
           {/* Category Filter Tabs */}
           <div className="flex gap-1.5 mb-2.5 overflow-x-auto custom-scrollbar pb-0.5">
             {[
-              { id: "all", label: "All Available" },
-              { id: "visitors", label: `Visitors (${activeVisitorCount})`, badge: true },
-              { id: "drones", label: "Drones" },
-              { id: "fixed", label: "Ground CCTVs" },
+              { id: "all", label: "All Cameras", icon: Layers },
+              { id: "visitors", label: `Visitors & Root (${activeVisitorCount})`, icon: Users, badge: true },
+              { id: "drones", label: "Drones", icon: Video },
+              { id: "fixed", label: "Ground CCTVs", icon: Video },
             ].map((cat) => (
               <button
                 key={cat.id}
@@ -364,6 +487,8 @@ export function CameraWindow({
             ) : (
               filteredSources.map((src) => {
                 const isSelected = src.id === config.cameraSourceId;
+                const isRootDevice = src.isRoot || src.isSelf;
+                const isVisitor = src.lensType === "visitor-camera";
                 return (
                   <button
                     key={src.id}
@@ -373,16 +498,39 @@ export function CameraWindow({
                     }}
                     className={`flex items-center justify-between p-2 rounded-lg border text-left transition-all ${
                       isSelected
-                        ? "bg-cyan-500/15 border-cyan-500/60 text-cyan-200"
+                        ? isRootDevice
+                          ? "bg-emerald-500/20 border-emerald-400 text-emerald-100 shadow-[0_0_12px_rgba(16,185,129,0.2)]"
+                          : "bg-cyan-500/15 border-cyan-500/60 text-cyan-200"
+                        : isRootDevice
+                        ? "bg-zinc-900/90 border-emerald-500/40 hover:bg-zinc-800/90 text-zinc-200"
                         : "bg-zinc-900/60 border-zinc-800 hover:bg-zinc-800/80 text-zinc-300"
                     }`}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div
-                        className="w-2 h-2 rounded-full shrink-0 bg-emerald-400 animate-pulse"
+                        className={`w-2 h-2 rounded-full shrink-0 animate-pulse ${
+                          isRootDevice ? "bg-emerald-400 ring-2 ring-emerald-500/30" : isVisitor ? "bg-emerald-400" : "bg-cyan-400"
+                        }`}
                       />
                       <div className="min-w-0">
-                        <div className="text-xs font-bold truncate">{src.label}</div>
+                        <div className="text-xs font-bold truncate flex items-center gap-1.5">
+                          {isRootDevice ? (
+                            <Radio className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          ) : isVisitor ? (
+                            <Users className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                          ) : null}
+                          <span className="truncate">{src.label}</span>
+                          {isRootDevice && (
+                            <span className="text-[9px] px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 font-extrabold rounded border border-emerald-500/50">
+                              ROOT (YOU)
+                            </span>
+                          )}
+                          {src.isRealDevice && !isRootDevice && (
+                            <span className="text-[8px] px-1 bg-emerald-950 text-emerald-400 rounded border border-emerald-500/40 animate-pulse">
+                              LIVE
+                            </span>
+                          )}
+                        </div>
                         <div className="text-[10px] text-zinc-500 truncate">
                           {src.sensorSpec} • {src.resolution} • {src.fov}
                         </div>
@@ -413,6 +561,36 @@ export function CameraWindow({
           showAiBoxes={config.showAiBoxes}
           onSnapshot={handleTakeSnapshot}
         />
+
+        {/* Broadcasting Notification Banner (Floating bottom center) */}
+        {isBroadcasting && (
+          <div className="absolute bottom-3 inset-x-4 max-w-sm mx-auto z-30 bg-black/90 backdrop-blur-md border border-rose-500/60 rounded-lg px-3 py-1.5 shadow-2xl flex items-center justify-between gap-2 font-mono text-[10px]">
+            <div className="flex items-center gap-1.5 text-rose-300">
+              <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+              <span className="font-bold">LIVE BROADCASTING</span>
+              <span className="text-zinc-400 hidden sm:inline">• Viewable by other visitors</span>
+            </div>
+            <div className="flex items-center gap-1">
+              {!isRootOrSelf && (
+                <button
+                  onClick={() => {
+                    const selfSrc = availableSources.find((s) => s.isRoot || s.isSelf);
+                    if (selfSrc) onUpdateConfig(config.slotId, { cameraSourceId: selfSrc.id });
+                  }}
+                  className="px-1.5 py-0.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 rounded border border-emerald-500/40 text-[9px]"
+                >
+                  View My Cam
+                </button>
+              )}
+              <button
+                onClick={stopBroadcasting}
+                className="px-1.5 py-0.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 rounded border border-rose-500/40 text-[9px]"
+              >
+                Stop
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* PTZ Interactive Overlay Pad */}
         {config.isPtzOpen && (
@@ -461,72 +639,17 @@ export function CameraWindow({
               </button>
               <div></div>
             </div>
-            <div className="text-[8px] text-zinc-500">
-              P: {config.ptz.pan}° | T: {config.ptz.tilt}°
+            <div className="flex items-center justify-between w-full text-[8px] text-zinc-400 px-1">
+              <span>P: {config.ptz.pan}°</span>
+              <span>T: {config.ptz.tilt}°</span>
             </div>
           </div>
         )}
 
-        {/* Tactical HUD Telemetry Layer */}
-        <div className="absolute inset-0 pointer-events-none p-3 flex flex-col justify-between z-10 font-mono">
-          {/* Top Real-Time Data Overlay */}
-          {showOverlay && matchedDrone ? (
-            <div className="w-full">
-              <DroneDataOverlay drone={matchedDrone} compact={!isFocused} showFullHud={isFocused} />
-            </div>
-          ) : (
-            <div className="flex justify-between items-start text-[10px] text-cyan-400 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
-              <div className="bg-black/60 px-2 py-0.5 rounded border border-cyan-500/30 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
-                <span>REC {formatRecTime(recSeconds)}</span>
-                <span className="text-zinc-400">| 60 FPS</span>
-              </div>
-              {matchedDrone && (
-                <div className="bg-black/60 px-2 py-0.5 rounded border border-cyan-500/30 text-right">
-                  <div>LAT {matchedDrone.coordinates.lat.toFixed(4)}°</div>
-                  <div>LNG {matchedDrone.coordinates.lng.toFixed(4)}°</div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Center Tactical Crosshair */}
-          <div className="flex justify-center items-center flex-1">
-            <div className="relative w-16 h-16 border border-cyan-500/25 rounded-full flex items-center justify-center">
-              <div className="w-1 h-1 bg-cyan-400 rounded-full" />
-              <div className="w-full h-0.5 bg-cyan-500/20 absolute"></div>
-              <div className="h-full w-0.5 bg-cyan-500/20 absolute"></div>
-            </div>
-          </div>
-
-          {/* Bottom HUD */}
-          <div className="flex justify-between items-end text-[10px] text-cyan-400 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
-            {matchedDrone ? (
-              <div className="bg-black/60 px-2 py-0.5 rounded border border-cyan-500/30 flex gap-2">
-                <span>ALT {matchedDrone.telemetry.altitude}m</span>
-                <span className="text-zinc-400">|</span>
-                <span>SPD {matchedDrone.telemetry.speed.toFixed(1)} km/h</span>
-                <span className="text-zinc-400">|</span>
-                <span
-                  className={
-                    matchedDrone.battery < 20 ? "text-rose-400 font-bold" : "text-emerald-400"
-                  }
-                >
-                  BAT {matchedDrone.battery}%
-                </span>
-              </div>
-            ) : (
-              <div className="bg-black/60 px-2 py-0.5 rounded border border-cyan-500/30">
-                STATIC SENSOR LINKED
-              </div>
-            )}
-
-            <div className="bg-black/60 px-2 py-0.5 rounded border border-cyan-500/30 flex items-center gap-1.5">
-              <span className="text-zinc-400">FILTER:</span>
-              <span className="uppercase text-cyan-300 font-bold">{config.visionMode}</span>
-            </div>
-          </div>
-        </div>
+        {/* Telemetry HUD Data Overlay */}
+        {matchedDrone && showOverlay && (
+          <DroneDataOverlay drone={matchedDrone} />
+        )}
 
         {/* Scanline CRT overlay */}
         <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%)] bg-[length:100%_4px] pointer-events-none opacity-25 z-10" />
@@ -534,3 +657,4 @@ export function CameraWindow({
     </div>
   );
 }
+

@@ -498,13 +498,11 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
                 ✕
               </button>
             </div>
-          </div>
-
-          {/* Category Filter Tabs */}
+          </div>            {/* Category Filter Tabs */}
           <div className="flex gap-1.5 mb-2.5 overflow-x-auto custom-scrollbar pb-0.5">
             {[
-              { id: "all", label: "All Available", icon: Layers },
-              { id: "visitors", label: `Visitors (${activeVisitorCount})`, icon: Users, badge: true },
+              { id: "all", label: "All Cameras", icon: Layers },
+              { id: "visitors", label: `Visitors & Root (${activeVisitorCount})`, icon: Users, badge: true },
               { id: "drones", label: "Drones", icon: Video },
               { id: "fixed", label: "Ground CCTVs", icon: Video },
             ].map((cat) => {
@@ -539,6 +537,7 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
               filteredSources.map((src) => {
                 const isSelected = src.id === selectedSourceId;
                 const isSrcVisitor = src.lensType === "visitor-camera";
+                const isRootDevice = src.isRoot || src.isSelf;
                 return (
                   <button
                     key={src.id}
@@ -548,25 +547,33 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
                     }}
                     className={`flex items-center justify-between p-2 rounded-lg border text-left transition-all ${
                       isSelected
-                        ? isSrcVisitor
+                        ? isRootDevice
+                          ? "bg-emerald-500/20 border-emerald-400 text-emerald-100 shadow-[0_0_12px_rgba(16,185,129,0.2)]"
+                          : isSrcVisitor
                           ? "bg-emerald-500/15 border-emerald-500/60 text-emerald-200"
                           : "bg-cyan-500/15 border-cyan-500/60 text-cyan-200"
+                        : isRootDevice
+                        ? "bg-zinc-900/90 border-emerald-500/40 hover:bg-zinc-800/90 text-zinc-200"
                         : "bg-zinc-900/60 border-zinc-800 hover:bg-zinc-800/80 text-zinc-300"
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <div
                         className={`w-2 h-2 rounded-full shrink-0 animate-pulse ${
-                          isSrcVisitor ? "bg-emerald-400" : "bg-cyan-400"
+                          isRootDevice ? "bg-emerald-400 ring-2 ring-emerald-500/30" : isSrcVisitor ? "bg-emerald-400" : "bg-cyan-400"
                         }`}
                       />
                       <div className="min-w-0">
                         <div className="text-xs font-bold truncate flex items-center gap-1.5">
-                          {isSrcVisitor && <User className="w-3 h-3 text-emerald-400 shrink-0" />}
+                          {isRootDevice ? (
+                            <Radio className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          ) : isSrcVisitor ? (
+                            <User className="w-3 h-3 text-emerald-400 shrink-0" />
+                          ) : null}
                           <span className="truncate">{src.label}</span>
-                          {src.isSelf && (
-                            <span className="text-[9px] px-1 bg-cyan-950 text-cyan-300 rounded border border-cyan-500/40">
-                              YOU
+                          {isRootDevice && (
+                            <span className="text-[9px] px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 font-extrabold rounded border border-emerald-500/50">
+                              ROOT (YOU)
                             </span>
                           )}
                         </div>
@@ -578,7 +585,7 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
                     {isSelected && (
                       <Check
                         className={`w-3.5 h-3.5 shrink-0 ${
-                          isSrcVisitor ? "text-emerald-400" : "text-cyan-400"
+                          isRootDevice || isSrcVisitor ? "text-emerald-400" : "text-cyan-400"
                         }`}
                       />
                     )}

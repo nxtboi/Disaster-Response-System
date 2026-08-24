@@ -6,6 +6,7 @@ import {
   AlertCircle,
   RefreshCw,
   RadioReceiver,
+  Radio,
   User,
   Wifi,
   Battery,
@@ -436,12 +437,25 @@ export function CameraRenderer({
 
         {/* Visitor Tactical Badge Overlay (Top Left) */}
         <div className="absolute top-2 left-2 flex flex-col gap-1 pointer-events-none z-20">
-          <div className="bg-black/85 backdrop-blur-md px-2 py-1 rounded border border-cyan-500/50 text-[10px] font-mono text-cyan-300 flex items-center gap-1.5 shadow-lg">
+          <div className={`px-2 py-1 rounded border text-[10px] font-mono flex items-center gap-1.5 shadow-lg backdrop-blur-md ${
+            source.isRoot || source.isSelf
+              ? "bg-emerald-950/90 border-emerald-400 text-emerald-200"
+              : "bg-black/85 border-cyan-500/50 text-cyan-300"
+          }`}>
             <div className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-            <User className="w-3 h-3 text-cyan-400" />
+            {source.isRoot || source.isSelf ? (
+              <Radio className="w-3 h-3 text-emerald-400" />
+            ) : (
+              <User className="w-3 h-3 text-cyan-400" />
+            )}
             <span className="font-bold text-white tracking-wide truncate max-w-[180px]">
               {source.visitorName || source.label}
             </span>
+            {(source.isRoot || source.isSelf) && (
+              <span className="text-[8px] font-extrabold px-1 py-0.2 bg-emerald-500/30 text-emerald-300 rounded border border-emerald-400">
+                ROOT
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-1">

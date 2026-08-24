@@ -371,6 +371,7 @@ export function DroneSelectorBar({
                   {filteredCamOptions.map((cam) => {
                     const isSelected = cam.id === selectedCamOption.id;
                     const isCamVisitor = cam.lensType === "visitor-camera";
+                    const isRoot = cam.isRoot || cam.isSelf;
 
                     return (
                       <button
@@ -382,9 +383,11 @@ export function DroneSelectorBar({
                         }}
                         className={`w-full flex items-center justify-between px-3 py-2 text-left transition-colors ${
                           isSelected
-                            ? isCamVisitor
+                            ? isRoot || isCamVisitor
                               ? "bg-emerald-500/15 text-emerald-100"
                               : "bg-cyan-500/15 text-zinc-100"
+                            : isRoot
+                            ? "bg-zinc-900/90 text-zinc-100 hover:bg-zinc-800"
                             : "hover:bg-zinc-800/70 text-zinc-300 hover:text-white"
                         }`}
                       >
@@ -392,24 +395,30 @@ export function DroneSelectorBar({
                           <div
                             className={`w-1 h-7 rounded-full shrink-0 ${
                               isSelected
-                                ? isCamVisitor
+                                ? isRoot || isCamVisitor
                                   ? "bg-emerald-400"
                                   : "bg-cyan-400"
+                                : isRoot
+                                ? "bg-emerald-500/60"
                                 : "bg-transparent"
                             }`}
                           />
                           <div className="flex flex-col min-w-0">
                             <div className="flex items-center gap-1.5">
-                              {isCamVisitor && <User className="w-3 h-3 text-emerald-400 shrink-0" />}
+                              {isRoot ? (
+                                <Radio className="w-3 h-3 text-emerald-400 shrink-0" />
+                              ) : isCamVisitor ? (
+                                <User className="w-3 h-3 text-emerald-400 shrink-0" />
+                              ) : null}
                               <span className="text-xs font-bold text-zinc-100 truncate">
                                 {cam.label}
                               </span>
-                              {cam.isSelf && (
-                                <span className="text-[8px] px-1 bg-cyan-950 text-cyan-300 rounded border border-cyan-500/40">
-                                  YOU
+                              {isRoot && (
+                                <span className="text-[8px] px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 font-extrabold rounded border border-emerald-500/50">
+                                  ROOT (YOU)
                                 </span>
                               )}
-                              {cam.isRealDevice && !cam.isSelf && (
+                              {cam.isRealDevice && !isRoot && (
                                 <span className="text-[8px] px-1 bg-emerald-950 text-emerald-400 rounded border border-emerald-500/40 animate-pulse">
                                   LIVE
                                 </span>
@@ -417,7 +426,7 @@ export function DroneSelectorBar({
                             </div>
                             <span
                               className={`text-[10px] font-mono truncate ${
-                                isCamVisitor ? "text-emerald-400/90" : "text-cyan-400/90"
+                                isRoot || isCamVisitor ? "text-emerald-400/90" : "text-cyan-400/90"
                               }`}
                             >
                               {cam.sensorSpec}
@@ -431,7 +440,7 @@ export function DroneSelectorBar({
                         {isSelected && (
                           <Check
                             className={`w-4 h-4 shrink-0 ml-2 ${
-                              isCamVisitor ? "text-emerald-400" : "text-cyan-400"
+                              isRoot || isCamVisitor ? "text-emerald-400" : "text-cyan-400"
                             }`}
                           />
                         )}

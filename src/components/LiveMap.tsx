@@ -128,11 +128,20 @@ export function LiveMap() {
       });
 
       if (nearbyWaypoint) {
-        setSelectedWaypointId(nearbyWaypoint.id);
-        setWaypointPlacedToast(`Selected: ${nearbyWaypoint.name}`);
-        setTimeout(() => {
-          setWaypointPlacedToast(null);
-        }, 2500);
+        if (selectedWaypointId === nearbyWaypoint.id) {
+          removeWaypoint(nearbyWaypoint.id);
+          setSelectedWaypointId(null);
+          setWaypointPlacedToast(`Removed: ${nearbyWaypoint.name}`);
+          setTimeout(() => {
+            setWaypointPlacedToast(null);
+          }, 2500);
+        } else {
+          setSelectedWaypointId(nearbyWaypoint.id);
+          setWaypointPlacedToast(`Selected: ${nearbyWaypoint.name} (Click again to remove)`);
+          setTimeout(() => {
+            setWaypointPlacedToast(null);
+          }, 2500);
+        }
       } else if (isPlacingWaypoint) {
         const newWp = addWaypoint({
           lat: Number(lat.toFixed(6)),
@@ -318,9 +327,16 @@ export function LiveMap() {
                   position={{ lat: wp.coordinates.lat, lng: wp.coordinates.lng }}
                   zIndex={isSurvivorDistress ? 2500 : isSelected ? 1100 : 900}
                   onClick={() => {
-                    setSelectedWaypointId(wp.id);
-                    setWaypointPlacedToast(`Selected ${wp.name}`);
-                    setTimeout(() => setWaypointPlacedToast(null), 2500);
+                    if (selectedWaypointId === wp.id) {
+                      removeWaypoint(wp.id);
+                      setSelectedWaypointId(null);
+                      setWaypointPlacedToast(`Removed ${wp.name}`);
+                      setTimeout(() => setWaypointPlacedToast(null), 2500);
+                    } else {
+                      setSelectedWaypointId(wp.id);
+                      setWaypointPlacedToast(`Selected ${wp.name} (Click again to remove)`);
+                      setTimeout(() => setWaypointPlacedToast(null), 2500);
+                    }
                   }}
                 >
                   {isSurvivorDistress ? (

@@ -167,11 +167,20 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
       });
 
       if (nearbyWaypoint) {
-        setSelectedWaypointId(nearbyWaypoint.id);
-        setWaypointPlacedToast(`Selected: ${nearbyWaypoint.name}`);
-        setTimeout(() => {
-          setWaypointPlacedToast(null);
-        }, 2500);
+        if (selectedWaypointIdRef.current === nearbyWaypoint.id) {
+          removeWaypoint(nearbyWaypoint.id);
+          setSelectedWaypointId(null);
+          setWaypointPlacedToast(`Removed: ${nearbyWaypoint.name}`);
+          setTimeout(() => {
+            setWaypointPlacedToast(null);
+          }, 2500);
+        } else {
+          setSelectedWaypointId(nearbyWaypoint.id);
+          setWaypointPlacedToast(`Selected: ${nearbyWaypoint.name} (Click again to remove)`);
+          setTimeout(() => {
+            setWaypointPlacedToast(null);
+          }, 2500);
+        }
       } else if (isPlacingWaypointRef.current) {
         const newWp = addWaypoint({
           lat: Number(clickLat.toFixed(6)),
@@ -509,9 +518,16 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
         marker = L.marker(latLng, { icon: wpIcon, zIndexOffset: isSurvivorDistress ? 2500 : 800 }).addTo(map);
         marker.on('click', (ev: L.LeafletMouseEvent) => {
           L.DomEvent.stopPropagation(ev);
-          setSelectedWaypointId(wp.id);
-          setWaypointPlacedToast(`Selected ${wp.name}`);
-          setTimeout(() => setWaypointPlacedToast(null), 2500);
+          if (selectedWaypointIdRef.current === wp.id) {
+            removeWaypoint(wp.id);
+            setSelectedWaypointId(null);
+            setWaypointPlacedToast(`Removed ${wp.name}`);
+            setTimeout(() => setWaypointPlacedToast(null), 2500);
+          } else {
+            setSelectedWaypointId(wp.id);
+            setWaypointPlacedToast(`Selected ${wp.name} (Click again to remove)`);
+            setTimeout(() => setWaypointPlacedToast(null), 2500);
+          }
         });
 
         marker.bindPopup(`

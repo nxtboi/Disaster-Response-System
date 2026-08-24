@@ -24,7 +24,7 @@ import {
   User,
   RefreshCw,
 } from "lucide-react";
-import { motion } from "motion/react";
+import { motion, useDragControls } from "motion/react";
 import { Drone } from "../types";
 import {
   VisionMode,
@@ -213,6 +213,28 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
     if (preset === "cinema") setDimensions({ width: 800, height: 480 });
   };
 
+  // Dimensions preset cycling for compact mode
+  const cycleDimensions = () => {
+    if (dimensions.width <= 380) {
+      setDimensions({ width: 480, height: 320 });
+    } else if (dimensions.width <= 520) {
+      setDimensions({ width: 640, height: 400 });
+    } else if (dimensions.width <= 680) {
+      setDimensions({ width: 800, height: 480 });
+    } else {
+      setDimensions({ width: 360, height: 240 });
+    }
+  };
+
+  const isTiny = dimensions.width < 380;
+  const isCompact = dimensions.width < 500;
+  const isMedium = dimensions.width >= 500 && dimensions.width < 660;
+  const isWide = dimensions.width >= 660;
+  const isShort = dimensions.height < 270;
+  const isTall = dimensions.height >= 380;
+
+  const dragControls = useDragControls();
+
   const content = (
     <div
       style={isFloating ? { width: `${dimensions.width}px`, height: `${dimensions.height}px` } : undefined}
@@ -222,24 +244,37 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
     >
       {/* Window Top Bar (Drag handle when floating) */}
       <div
-        className={`flex items-center justify-between px-3 py-2 border-b border-zinc-800/80 bg-zinc-900/80 backdrop-blur-md ${
+        onPointerDown={(e) => {
+          const target = e.target as HTMLElement;
+          if (target.closest("button, input, select, a, [role='button'], .no-drag")) {
+            return;
+          }
+          if (isFloating) {
+            dragControls.start(e);
+          }
+        }}
+        className={`flex items-center justify-between px-2.5 py-1.5 border-b border-zinc-800/80 bg-zinc-900/90 backdrop-blur-md select-none ${
           isFloating ? "cursor-grab active:cursor-grabbing" : ""
         }`}
       >
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-1.5 min-w-0">
           {isFloating && (
-            <div className="text-zinc-500 hover:text-cyan-400 p-0.5" title="Drag to reposition window anywhere">
-              <GripHorizontal className="w-4 h-4" />
+            <div className="text-zinc-500 hover:text-cyan-400 p-0.5" title="Drag window to reposition">
+              <GripHorizontal className="w-3.5 h-3.5" />
             </div>
           )}
 
           {/* Camera Source Selector Button */}
           <button
-            onClick={() => {
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
               setShowSelectorMenu(!showSelectorMenu);
               setShowFiltersMenu(false);
             }}
-            className={`flex items-center gap-1.5 px-2 py-0.5 rounded border text-xs font-bold transition-colors truncate max-w-[200px] ${
+            className={`flex items-center gap-1 px-1.5 py-0.5 rounded border text-[11px] font-bold transition-colors truncate ${
+              isTiny ? "max-w-[100px]" : isCompact ? "max-w-[145px]" : "max-w-[210px]"
+            } ${
               isVisitorFeed
                 ? "bg-emerald-950/60 border-emerald-500/50 text-emerald-200 hover:bg-emerald-900/60"
                 : "bg-zinc-800/90 hover:bg-zinc-700/90 border-zinc-700/80 text-zinc-200"
@@ -247,25 +282,31 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
             title="Click to switch drone, visitor camera, or ground sensor"
           >
             {isVisitorFeed ? (
-              <Users className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <Users className="w-3 h-3 text-emerald-400 shrink-0" />
             ) : (
-              <Video className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+              <Video className="w-3 h-3 text-cyan-400 shrink-0" />
             )}
             <span className="truncate">{activeSource.shortLabel}</span>
-            <ChevronDown className="w-3 h-3 text-zinc-400 shrink-0 ml-0.5" />
+            <ChevronDown className="w-2.5 h-2.5 text-zinc-400 shrink-0 ml-0.5" />
           </button>
 
           {/* Live Indicator */}
-          <div className="hidden sm:flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-500/20 border border-rose-500/30 text-[9px] text-rose-400 font-bold">
-            <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
-            <span>LIVE</span>
-          </div>
+          {!isTiny && (
+            <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-500/20 border border-rose-500/30 text-[9px] text-rose-400 font-bold">
+              <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+              <span>LIVE</span>
+            </div>
+          )}
 
           {/* If viewing visitor, quick cycle arrow buttons */}
-          {isVisitorFeed && allVisitorList.length > 1 && (
-            <div className="hidden md:flex items-center gap-0.5 bg-zinc-950/70 border border-emerald-500/30 rounded px-1">
+          {isVisitorFeed && allVisitorList.length > 1 && !isTiny && (
+            <div className="flex items-center gap-0.5 bg-zinc-950/70 border border-emerald-500/30 rounded px-1">
               <button
-                onClick={() => cycleVisitor("prev")}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  cycleVisitor("prev");
+                }}
                 className="p-0.5 text-zinc-400 hover:text-emerald-300"
                 title="View previous visitor camera"
               >
@@ -275,7 +316,11 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
                 {currentVisitorIdx + 1}/{allVisitorList.length}
               </span>
               <button
-                onClick={() => cycleVisitor("next")}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  cycleVisitor("next");
+                }}
                 className="p-0.5 text-zinc-400 hover:text-emerald-300"
                 title="View next visitor camera"
               >
@@ -285,11 +330,15 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
           )}
         </div>
 
-        {/* Action Controls */}
+        {/* Action Controls - Responsively Scaled */}
         <div className="flex items-center gap-1 text-zinc-400 shrink-0">
           {/* Quick Broadcast Camera Toggle */}
           <button
-            onClick={toggleBroadcasting}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleBroadcasting();
+            }}
             className={`px-1.5 py-0.5 rounded text-[10px] flex items-center gap-1 border transition-colors ${
               isBroadcasting
                 ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/50"
@@ -297,58 +346,74 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
             }`}
             title={
               isBroadcasting
-                ? "You are broadcasting camera to all other devices (Click to stop)"
-                : "Broadcast your device camera to all other devices & visitors"
+                ? "Broadcasting camera to all devices (Click to stop)"
+                : "Broadcast your device camera to other devices"
             }
           >
             <Radio className={`w-3 h-3 ${isBroadcasting ? "text-emerald-400 animate-pulse" : "text-zinc-500"}`} />
-            <span className="hidden sm:inline">{isBroadcasting ? "SHARING" : "SHARE CAM"}</span>
+            {!isCompact && <span>{isBroadcasting ? "SHARING" : "SHARE"}</span>}
           </button>
 
           {/* If broadcasting, option to flip front/rear camera */}
           {isBroadcasting && (
             <button
-              onClick={switchCameraFacing}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                switchCameraFacing();
+              }}
               className="p-1 rounded text-zinc-400 hover:text-cyan-300 hover:bg-zinc-800 transition-colors"
-              title={`Flip Camera Sensor (${facingMode === "user" ? "Front / Self" : "Rear / Environment"})`}
+              title={`Flip Camera Sensor (${facingMode === "user" ? "Front" : "Rear"})`}
             >
-              <RefreshCw className="w-3.5 h-3.5" />
+              <RefreshCw className="w-3 h-3" />
             </button>
           )}
 
           {/* Data Overlay / HUD Mode Switcher */}
           <button
-            onClick={() =>
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
               setHudMode((prev) =>
                 prev === "full" ? "compact" : prev === "compact" ? "reticle_only" : prev === "reticle_only" ? "off" : "full"
-              )
-            }
+              );
+            }}
             className={`px-1.5 py-0.5 rounded text-[10px] flex items-center gap-1 border transition-colors ${
               hudMode !== "off"
                 ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
                 : "border-zinc-800 text-zinc-500 hover:text-zinc-300"
             }`}
-            title={`Telemetry HUD Overlay Mode: ${hudMode.toUpperCase()} (Click to toggle)`}
+            title={`Telemetry HUD Mode: ${hudMode.toUpperCase()} (Click to cycle)`}
           >
             <Activity className="w-3 h-3 text-cyan-400" />
-            <span className="uppercase">{hudMode}</span>
+            {isTiny ? (
+              <span className="uppercase text-[9px]">{hudMode === "full" ? "F" : hudMode === "compact" ? "C" : hudMode === "reticle_only" ? "R" : "OFF"}</span>
+            ) : !isCompact ? (
+              <span className="uppercase">{hudMode}</span>
+            ) : null}
           </button>
 
           {/* AI Detection Toggle */}
           <button
-            onClick={() => setShowAiBoxes(!showAiBoxes)}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowAiBoxes(!showAiBoxes);
+            }}
             className={`p-1 rounded transition-colors ${
               showAiBoxes ? "text-emerald-400 bg-emerald-950/60" : "hover:text-zinc-200"
             }`}
             title="AI Target Tracking overlay"
           >
-            <Crosshair className="w-3.5 h-3.5" />
+            <Crosshair className="w-3 h-3" />
           </button>
 
           {/* Vision Filters Menu */}
           <div className="relative">
             <button
-              onClick={() => {
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
                 setShowFiltersMenu(!showFiltersMenu);
                 setShowSelectorMenu(false);
               }}
@@ -357,13 +422,15 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
               }`}
               title="Tactical Optical Filters (NVG, Thermal, Mono)"
             >
-              <Eye className="w-3.5 h-3.5" />
+              <Eye className="w-3 h-3" />
             </button>
 
             {showFiltersMenu && (
               <div className="absolute right-0 mt-2 w-36 bg-zinc-950/95 border border-zinc-800 rounded-lg p-1.5 shadow-2xl backdrop-blur-xl flex flex-col gap-1 z-50 font-mono text-[11px]">
                 <button
-                  onClick={() => {
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setVisionMode("normal");
                     setShowFiltersMenu(false);
                   }}
@@ -375,7 +442,9 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
                   {visionMode === "normal" && <Check className="w-3 h-3 text-cyan-400" />}
                 </button>
                 <button
-                  onClick={() => {
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setVisionMode("nvg");
                     setShowFiltersMenu(false);
                   }}
@@ -387,7 +456,9 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
                   {visionMode === "nvg" && <Check className="w-3 h-3 text-emerald-400" />}
                 </button>
                 <button
-                  onClick={() => {
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setVisionMode("thermal");
                     setShowFiltersMenu(false);
                   }}
@@ -399,7 +470,9 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
                   {visionMode === "thermal" && <Check className="w-3 h-3 text-amber-400" />}
                 </button>
                 <button
-                  onClick={() => {
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setVisionMode("mono");
                     setShowFiltersMenu(false);
                   }}
@@ -416,7 +489,11 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
 
           {/* Zoom Cycle */}
           <button
-            onClick={() => setZoom((prev) => (prev === 1 ? 2 : prev === 2 ? 4 : 1))}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setZoom((prev) => (prev === 1 ? 2 : prev === 2 ? 4 : 1));
+            }}
             className={`px-1.5 py-0.5 rounded text-[10px] border transition-colors ${
               zoom > 1 ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40" : "border-zinc-800 text-zinc-400"
             }`}
@@ -427,38 +504,104 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
 
           {/* Snapshot Button */}
           <button
-            onClick={takeSnapshot}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              takeSnapshot();
+            }}
             className="p-1 rounded hover:bg-zinc-800 hover:text-cyan-400 transition-colors"
             title="Take Recon Snapshot"
           >
-            <Camera className="w-3.5 h-3.5" />
+            <Camera className="w-3 h-3" />
           </button>
 
-          {/* Preset Sizing options when floating */}
+          {/* Preset Sizing options when floating - Adapt dynamically based on viewer width */}
           {isFloating && (
-            <div className="hidden sm:flex items-center gap-0.5 border-l border-zinc-800 pl-1 ml-0.5">
-              <button
-                onClick={() => setPresetDimension("compact")}
-                className="px-1 py-0.5 text-[9px] hover:text-cyan-300 hover:bg-zinc-800 rounded"
-                title="Preset Compact (360x240)"
-              >
-                S
-              </button>
-              <button
-                onClick={() => setPresetDimension("default")}
-                className="px-1 py-0.5 text-[9px] hover:text-cyan-300 hover:bg-zinc-800 rounded"
-                title="Preset Medium (480x320)"
-              >
-                M
-              </button>
-              <button
-                onClick={() => setPresetDimension("wide")}
-                className="px-1 py-0.5 text-[9px] hover:text-cyan-300 hover:bg-zinc-800 rounded"
-                title="Preset Large (640x400)"
-              >
-                L
-              </button>
-            </div>
+            <>
+              {isWide ? (
+                <div className="flex items-center gap-0.5 border-l border-zinc-800 pl-1 ml-0.5">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPresetDimension("compact");
+                    }}
+                    className={`px-1 py-0.5 text-[9px] rounded transition-colors ${
+                      dimensions.width <= 380 ? "bg-cyan-500/30 text-cyan-300 font-bold" : "hover:text-cyan-300 hover:bg-zinc-800"
+                    }`}
+                    title="Compact (360x240)"
+                  >
+                    S
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPresetDimension("default");
+                    }}
+                    className={`px-1 py-0.5 text-[9px] rounded transition-colors ${
+                      dimensions.width > 380 && dimensions.width <= 520 ? "bg-cyan-500/30 text-cyan-300 font-bold" : "hover:text-cyan-300 hover:bg-zinc-800"
+                    }`}
+                    title="Medium (480x320)"
+                  >
+                    M
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPresetDimension("wide");
+                    }}
+                    className={`px-1 py-0.5 text-[9px] rounded transition-colors ${
+                      dimensions.width > 520 && dimensions.width <= 680 ? "bg-cyan-500/30 text-cyan-300 font-bold" : "hover:text-cyan-300 hover:bg-zinc-800"
+                    }`}
+                    title="Wide (640x400)"
+                  >
+                    L
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPresetDimension("cinema");
+                    }}
+                    className={`px-1 py-0.5 text-[9px] rounded transition-colors ${
+                      dimensions.width > 680 ? "bg-cyan-500/30 text-cyan-300 font-bold" : "hover:text-cyan-300 hover:bg-zinc-800"
+                    }`}
+                    title="Cinema (800x480)"
+                  >
+                    XL
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    cycleDimensions();
+                  }}
+                  className="p-1 rounded text-zinc-400 hover:text-cyan-300 hover:bg-zinc-800 transition-colors ml-0.5"
+                  title={`Preset Size (${dimensions.width}x${dimensions.height}px) - Click to cycle size`}
+                >
+                  <Maximize2 className="w-3 h-3" />
+                </button>
+              )}
+            </>
+          )}
+
+          {/* Close button if provided */}
+          {onClose && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
+              className="p-1 rounded text-zinc-500 hover:text-rose-400 hover:bg-zinc-800 transition-colors ml-0.5"
+              title="Close camera viewer"
+            >
+              <Minimize2 className="w-3 h-3" />
+            </button>
           )}
         </div>
       </div>
@@ -612,11 +755,15 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
         />
 
         {/* REAL-TIME DATA OVERLAY HUD COMPONENT */}
-        <div className="absolute inset-0 pointer-events-none p-3 flex flex-col justify-between z-10">
+        <div className="absolute inset-0 pointer-events-none p-2.5 flex flex-col justify-between z-10">
           {/* Top Real-time telemetry row or full overlay */}
           {!isVisitorFeed && hudMode === "full" && (
             <div className="w-full">
-              <DroneDataOverlay drone={matchedDrone} compact={false} showFullHud={dimensions.height > 300} />
+              <DroneDataOverlay
+                drone={matchedDrone}
+                compact={isShort || isCompact}
+                showFullHud={!isShort && dimensions.height >= 320 && dimensions.width >= 500}
+              />
             </div>
           )}
 
@@ -640,10 +787,14 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
             </div>
           )}
 
-          {/* Center Crosshairs & Optical Reticle (visible in full, compact & reticle_only modes) */}
+          {/* Center Crosshairs & Optical Reticle (scales with viewport size) */}
           {hudMode !== "off" && (
             <div className="flex justify-center items-center flex-1 pointer-events-none my-1">
-              <div className="relative w-16 h-16 sm:w-20 sm:h-20 border border-cyan-500/30 rounded-full flex items-center justify-center">
+              <div
+                className={`relative ${
+                  isShort ? "w-12 h-12" : "w-16 h-16 sm:w-20 sm:h-20"
+                } border border-cyan-500/30 rounded-full flex items-center justify-center`}
+              >
                 <div className="w-1.5 h-1.5 bg-cyan-400 rounded-full shadow-[0_0_8px_rgba(6,182,212,1)]" />
                 <div className="w-full h-0.5 bg-cyan-500/30 absolute"></div>
                 <div className="h-full w-0.5 bg-cyan-500/30 absolute"></div>
@@ -657,10 +808,10 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
 
           {/* Bottom Telemetry & REC Bar */}
           <div className="flex justify-between items-end text-[10px] text-cyan-400 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
-            <div className="bg-black/70 px-2 py-0.5 rounded border border-cyan-500/30 flex items-center gap-2">
+            <div className="bg-black/70 px-2 py-0.5 rounded border border-cyan-500/30 flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
               <span>REC {formatRecTime(recSeconds)}</span>
-              <span className="text-zinc-400 hidden sm:inline">| 60 FPS</span>
+              {!isTiny && <span className="text-zinc-400">| 60 FPS</span>}
             </div>
 
             <div className="bg-black/70 px-2 py-0.5 rounded border border-cyan-500/30 flex items-center gap-1.5">
@@ -699,6 +850,8 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
     return (
       <motion.div
         drag
+        dragControls={dragControls}
+        dragListener={false}
         dragMomentum={false}
         dragElastic={0.05}
         initial={{ x: 24, y: 0, opacity: 0, scale: 0.95 }}

@@ -1,14 +1,10 @@
 import { motion } from "motion/react";
 import droneImage from "../assets/images/drone_landing_hero_1787467797692.jpg";
-import { Crosshair, ShieldAlert, LogOut, User, ShieldCheck } from "lucide-react";
+import { Crosshair, ShieldAlert } from "lucide-react";
 
 export function LandingPage({ 
   onLaunch, 
   onExploreSystem,
-  onLogout,
-  userRole,
-  username,
-  onOpenAdminPanel,
 }: { 
   onLaunch: () => void; 
   onExploreSystem?: () => void; 
@@ -103,44 +99,6 @@ export function LandingPage({
           </motion.div>
         </motion.div>
       </div>
-
-      {/* Top Right User Info & Logout Button */}
-      {onLogout && (
-        <div className="absolute top-6 right-6 z-20 flex items-center gap-3 font-mono">
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-900/80 backdrop-blur-md border border-cyan-500/30 text-xs text-zinc-200 shadow-lg">
-            {userRole === "admin" ? (
-              <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-            ) : (
-              <User className="w-3.5 h-3.5 text-cyan-400" />
-            )}
-            <span className="font-semibold text-zinc-100">{username || (userRole === "admin" ? "admin" : "operator")}</span>
-            <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold uppercase ${
-              userRole === "admin" ? "bg-amber-500/20 text-amber-300 border border-amber-500/40" : "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
-            }`}>
-              {userRole || "operator"}
-            </span>
-          </div>
-
-          {userRole === "admin" && onOpenAdminPanel && (
-            <button
-              onClick={onOpenAdminPanel}
-              className="px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 hover:text-amber-200 text-xs font-semibold transition-all shadow-sm"
-              title="Open Admin Panel"
-            >
-              ADMIN PANEL
-            </button>
-          )}
-
-          <button
-            onClick={onLogout}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 hover:border-rose-500/50 text-rose-300 hover:text-rose-200 text-xs font-semibold transition-all shadow-sm"
-            title="Log Out"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span>LOGOUT</span>
-          </button>
-        </div>
-      )}
 
       {/* Decorative HUD Elements */}
       <motion.div 

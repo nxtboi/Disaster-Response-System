@@ -137,10 +137,6 @@ function AppContent() {
         <LandingPage
           onLaunch={() => setCurrentPage("command_center")}
           onExploreSystem={() => setCurrentPage("explore_system")}
-          onLogout={handleLogout}
-          userRole={userRole}
-          username={currentUser?.username}
-          onOpenAdminPanel={userRole === "admin" ? () => setCurrentPage("admin_panel") : undefined}
         />
       ) : currentPage === "explore_system" ? (
         <ExploreSystemPage

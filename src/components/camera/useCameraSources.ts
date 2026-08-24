@@ -16,7 +16,11 @@ export function useCameraSources(
     startBroadcasting,
     stopBroadcasting,
     toggleBroadcasting,
+    switchCameraFacing,
+    facingMode,
     activeVisitorCount,
+    realDeviceCount,
+    myDeviceId,
   } = useVisitorCameras(currentUsername);
 
   useEffect(() => {
@@ -63,6 +67,10 @@ export function useCameraSources(
     startBroadcasting,
     stopBroadcasting,
     toggleBroadcasting,
+    switchCameraFacing,
+    facingMode,
     activeVisitorCount,
+    realDeviceCount,
+    myDeviceId,
   };
 }

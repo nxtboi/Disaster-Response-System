@@ -35,6 +35,8 @@ export interface CameraSourceInfo {
   visitorLatency?: number;
   visitorBattery?: number;
   isSelf?: boolean;
+  isRealDevice?: boolean;
+  hasLiveFrame?: boolean;
   stream?: MediaStream;
 }
 

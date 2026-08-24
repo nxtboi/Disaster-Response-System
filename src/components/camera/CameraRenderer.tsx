@@ -42,6 +42,8 @@ export function CameraRenderer({
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isLoadingWebcam, setIsLoadingWebcam] = useState(false);
   const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
+  const [remoteFrame, setRemoteFrame] = useState<string | null>(null);
+  const [remoteFrameTimestamp, setRemoteFrameTimestamp] = useState<number>(0);
 
   // Filter styles
   const filterClass = {
@@ -134,6 +136,50 @@ export function CameraRenderer({
       visitorVideoRef.current.play().catch(() => {});
     }
   }, [source.lensType, source.stream]);
+
+  // Poll real-time live frames from backend server if viewing another device
+  useEffect(() => {
+    if (source.lensType !== "visitor-camera" || source.isSelf) {
+      setRemoteFrame(null);
+      return;
+    }
+
+    let isMounted = true;
+    let pollTimer: number | null = null;
+    let isFetching = false;
+
+    const fetchLiveFrame = async () => {
+      if (isFetching) return;
+      try {
+        isFetching = true;
+        const res = await fetch(`/api/visitors/${encodeURIComponent(source.id)}/frame`);
+        if (!res.ok) {
+          if (isMounted) setRemoteFrame(null);
+          return;
+        }
+        const data = await res.json();
+        if (isMounted && data && data.frame) {
+          setRemoteFrame(data.frame);
+          setRemoteFrameTimestamp(data.timestamp || Date.now());
+        }
+      } catch {
+        // Fallback to canvas
+      } finally {
+        isFetching = false;
+      }
+    };
+
+    // Immediate fetch
+    fetchLiveFrame();
+
+    // Poll live frame stream at ~10 FPS (100ms)
+    pollTimer = window.setInterval(fetchLiveFrame, 100);
+
+    return () => {
+      isMounted = false;
+      if (pollTimer) clearInterval(pollTimer);
+    };
+  }, [source.lensType, source.id, source.isSelf]);
 
   // High-fidelity procedural Tactical Visitor Bodycam / Helmet Cam Canvas simulation
   useEffect(() => {
@@ -370,6 +416,13 @@ export function CameraRenderer({
             autoPlay
             playsInline
             muted
+            style={transformStyle}
+            className={`w-full h-full object-cover ${filterClass}`}
+          />
+        ) : remoteFrame ? (
+          <img
+            src={remoteFrame}
+            alt="Live Remote Visitor Feed"
             style={transformStyle}
             className={`w-full h-full object-cover ${filterClass}`}
           />

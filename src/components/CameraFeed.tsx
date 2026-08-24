@@ -22,6 +22,7 @@ import {
   ChevronRight,
   Share2,
   User,
+  RefreshCw,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { Drone } from "../types";
@@ -54,7 +55,10 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
     visitorSources,
     isBroadcasting,
     toggleBroadcasting,
+    switchCameraFacing,
+    facingMode,
     activeVisitorCount,
+    realDeviceCount,
   } = useCameraSources(drones, true, currentUser?.username || "Operator");
 
   const defaultSourceId = targetDrone
@@ -293,13 +297,24 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
             }`}
             title={
               isBroadcasting
-                ? "You are broadcasting camera to all visitors (Click to stop)"
-                : "Broadcast your camera to other visitors"
+                ? "You are broadcasting camera to all other devices (Click to stop)"
+                : "Broadcast your device camera to all other devices & visitors"
             }
           >
             <Radio className={`w-3 h-3 ${isBroadcasting ? "text-emerald-400 animate-pulse" : "text-zinc-500"}`} />
             <span className="hidden sm:inline">{isBroadcasting ? "SHARING" : "SHARE CAM"}</span>
           </button>
+
+          {/* If broadcasting, option to flip front/rear camera */}
+          {isBroadcasting && (
+            <button
+              onClick={switchCameraFacing}
+              className="p-1 rounded text-zinc-400 hover:text-cyan-300 hover:bg-zinc-800 transition-colors"
+              title={`Flip Camera Sensor (${facingMode === "user" ? "Front / Self" : "Rear / Environment"})`}
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Data Overlay / HUD Mode Switcher */}
           <button

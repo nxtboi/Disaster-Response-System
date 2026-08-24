@@ -73,25 +73,53 @@ export function MissionPlanner() {
               No waypoints set. Tap &apos;+ Add Waypoint&apos; or click directly on map.
             </div>
           ) : (
-            waypoints.map((wp) => (
-              <div key={wp.id} className="flex items-center gap-3 text-xs bg-zinc-800/50 p-2 rounded border border-zinc-700/50 group">
-                <MapPin className="w-4 h-4 text-amber-400 shrink-0" />
-                <span className="text-zinc-300 font-mono font-bold truncate">WP-{String(wp.index).padStart(2, "0")}: {wp.name}</span>
-                <span className="ml-auto font-mono text-zinc-500 text-[11px] shrink-0">
-                  {wp.coordinates.lat.toFixed(4)}, {wp.coordinates.lng.toFixed(4)}
-                </span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeWaypoint(wp.id);
-                  }}
-                  className="p-1 rounded text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                  title="Delete waypoint"
+            waypoints.map((wp) => {
+              const isVoiceAlert = wp.isVoiceAlert || wp.name.toLowerCase().includes('survivor') || wp.name.toLowerCase().includes('distress');
+              return (
+                <div
+                  key={wp.id}
+                  className={`flex items-center gap-2.5 text-xs p-2 rounded border group transition-all ${
+                    isVoiceAlert
+                      ? "bg-rose-950/30 border-rose-500/40 text-rose-200"
+                      : "bg-zinc-800/50 border-zinc-700/50 text-zinc-300"
+                  }`}
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))
+                  {isVoiceAlert ? (
+                    <span className="text-sm shrink-0">🚨</span>
+                  ) : (
+                    <MapPin className="w-4 h-4 text-amber-400 shrink-0" />
+                  )}
+                  <div className="flex flex-col min-w-0">
+                    <span className="font-mono font-bold truncate text-[11px]">
+                      {isVoiceAlert ? wp.name : `WP-${String(wp.index).padStart(2, "0")}: ${wp.name}`}
+                    </span>
+                    {isVoiceAlert && (
+                      <span className="text-[9px] text-rose-400 font-mono flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                        Voice Alert Pin (Stays on map)
+                      </span>
+                    )}
+                  </div>
+                  <span className="ml-auto font-mono text-zinc-500 text-[10px] shrink-0">
+                    {wp.coordinates.lat.toFixed(4)}, {wp.coordinates.lng.toFixed(4)}
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeWaypoint(wp.id);
+                    }}
+                    className={`p-1 rounded transition-colors ${
+                      isVoiceAlert
+                        ? "text-rose-400 hover:text-rose-200 hover:bg-rose-500/20"
+                        : "text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10"
+                    }`}
+                    title={isVoiceAlert ? "Dismiss & Remove Alert from map" : "Delete waypoint"}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              );
+            })
           )}
 
           <div

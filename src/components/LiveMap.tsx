@@ -128,22 +128,21 @@ export function LiveMap() {
       });
 
       if (nearbyWaypoint) {
-        removeWaypoint(nearbyWaypoint.id);
-        setSelectedWaypointId(null);
-        setWaypointPlacedToast(`Deleted Waypoint: ${nearbyWaypoint.name}`);
+        setSelectedWaypointId(nearbyWaypoint.id);
+        setWaypointPlacedToast(`Selected: ${nearbyWaypoint.name}`);
         setTimeout(() => {
           setWaypointPlacedToast(null);
-        }, 3000);
-      } else {
+        }, 2500);
+      } else if (isPlacingWaypoint) {
         const newWp = addWaypoint({
           lat: Number(lat.toFixed(6)),
           lng: Number(lng.toFixed(6)),
         });
         setSelectedWaypointId(newWp.id);
-        setWaypointPlacedToast(`Placed ${newWp.name} (Click on it again to delete)`);
+        setWaypointPlacedToast(`Placed ${newWp.name}`);
         setTimeout(() => {
           setWaypointPlacedToast(null);
-        }, 3500);
+        }, 3000);
       }
     }
   };
@@ -312,12 +311,12 @@ export function LiveMap() {
             {/* Tactical Waypoint Markers */}
             {waypoints.map((wp) => {
               const isSelected = selectedWaypointId === wp.id;
-              const isSurvivorDistress = wp.name.toLowerCase().includes('survivor') || wp.name.toLowerCase().includes('help') || wp.name.toLowerCase().includes('distress');
+              const isSurvivorDistress = wp.isVoiceAlert || wp.name.toLowerCase().includes('survivor') || wp.name.toLowerCase().includes('help') || wp.name.toLowerCase().includes('distress');
               return (
                 <AdvancedMarker
                   key={wp.id}
                   position={{ lat: wp.coordinates.lat, lng: wp.coordinates.lng }}
-                  zIndex={isSurvivorDistress ? 1500 : isSelected ? 1100 : 900}
+                  zIndex={isSurvivorDistress ? 2500 : isSelected ? 1100 : 900}
                   onClick={() => {
                     setSelectedWaypointId(wp.id);
                     setWaypointPlacedToast(`Selected ${wp.name}`);
@@ -325,17 +324,18 @@ export function LiveMap() {
                   }}
                 >
                   {isSurvivorDistress ? (
-                    <div className="relative w-14 h-14 flex items-center justify-center cursor-pointer group">
+                    <div className="relative w-16 h-16 flex items-center justify-center cursor-pointer group">
                       <div className="absolute inset-0 bg-rose-500/40 rounded-full animate-ping"></div>
-                      <div className="absolute inset-1.5 bg-rose-500/25 rounded-full animate-pulse border-2 border-rose-500 shadow-[0_0_18px_rgba(244,63,94,0.8)]"></div>
-                      <div className="w-8 h-8 rounded-full bg-rose-600 text-white border-2 border-white flex items-center justify-center shadow-[0_0_22px_rgba(244,63,94,1)] z-10 transition-transform group-hover:scale-125">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <div className="absolute inset-1.5 bg-rose-500/30 rounded-full animate-pulse border-2 border-rose-500 shadow-[0_0_22px_rgba(244,63,94,0.9)]"></div>
+                      <div className="w-9 h-9 rounded-full bg-rose-600 text-white border-2 border-white flex items-center justify-center shadow-[0_0_24px_rgba(244,63,94,1)] z-10 transition-transform group-hover:scale-125">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
                           <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
                           <line x1="12" x2="12" y1="19" y2="22"/>
                         </svg>
                       </div>
-                      <div className="absolute -bottom-6 whitespace-nowrap px-2 py-0.5 rounded text-[9px] font-mono font-extrabold bg-rose-950 text-rose-200 border border-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.7)] flex items-center gap-1 pointer-events-none">
+                      <div className="absolute -bottom-6 whitespace-nowrap px-2 py-0.5 rounded text-[9px] font-mono font-black bg-rose-950 text-rose-100 border border-rose-500 shadow-[0_0_14px_rgba(244,63,94,0.8)] flex items-center gap-1 pointer-events-none">
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-ping"></span>
                         <span>{wp.name}</span>
                       </div>
                     </div>
@@ -487,15 +487,27 @@ export function LiveMap() {
 
       {/* Selected Waypoint On-Map Action Card */}
       {selectedWaypoint && (
-        <div className="absolute bottom-6 left-6 z-[400] w-60 bg-zinc-950/95 border border-amber-500/60 p-2.5 rounded-xl shadow-[0_0_25px_rgba(0,0,0,0.8)] backdrop-blur-xl flex flex-col gap-2 font-mono">
+        <div className={`absolute bottom-6 left-6 z-[400] w-64 bg-zinc-950/95 p-3 rounded-xl shadow-[0_0_25px_rgba(0,0,0,0.85)] backdrop-blur-xl flex flex-col gap-2 font-mono border ${
+          selectedWaypoint.isVoiceAlert || selectedWaypoint.name.toLowerCase().includes("survivor") || selectedWaypoint.name.toLowerCase().includes("distress")
+            ? "border-rose-500/80 shadow-[0_0_20px_rgba(244,63,94,0.3)]"
+            : "border-amber-500/60"
+        }`}>
           <div className="flex items-center justify-between gap-1.5 border-b border-zinc-800 pb-1.5">
             <div className="flex items-center gap-1.5 min-w-0">
-              <div className="w-5 h-5 rounded-md bg-amber-400 text-black font-extrabold flex items-center justify-center text-[11px] shrink-0 shadow-sm">
-                {String(selectedWaypoint.index).padStart(2, "0")}
+              <div className={`w-5 h-5 rounded-md font-extrabold flex items-center justify-center text-[11px] shrink-0 shadow-sm ${
+                selectedWaypoint.isVoiceAlert || selectedWaypoint.name.toLowerCase().includes("survivor")
+                  ? "bg-rose-500 text-white"
+                  : "bg-amber-400 text-black"
+              }`}>
+                {selectedWaypoint.isVoiceAlert ? "🚨" : String(selectedWaypoint.index).padStart(2, "0")}
               </div>
               <div className="min-w-0">
                 <div className="font-bold text-xs text-zinc-100 truncate">{selectedWaypoint.name}</div>
-                <div className="text-[9px] text-amber-400">{selectedWaypoint.action}</div>
+                <div className={`text-[9px] font-semibold ${
+                  selectedWaypoint.isVoiceAlert ? "text-rose-400" : "text-amber-400"
+                }`}>
+                  {selectedWaypoint.isVoiceAlert ? "AI VOICE DISTRESS PIN" : selectedWaypoint.action}
+                </div>
               </div>
             </div>
             <button
@@ -507,34 +519,45 @@ export function LiveMap() {
             </button>
           </div>
 
-          <div className="text-[10px] text-zinc-400 flex items-center justify-between">
-            <span>POS:</span>
-            <span className="text-zinc-200">{selectedWaypoint.coordinates.lat.toFixed(4)}°, {selectedWaypoint.coordinates.lng.toFixed(4)}°</span>
+          <div className="text-[10px] text-zinc-400 flex flex-col gap-1">
+            <div className="flex items-center justify-between">
+              <span>GPS POS:</span>
+              <span className="text-zinc-200 font-semibold">{selectedWaypoint.coordinates.lat.toFixed(5)}°, {selectedWaypoint.coordinates.lng.toFixed(5)}°</span>
+            </div>
+            {selectedWaypoint.distressTranscript && (
+              <div className="text-[9px] bg-rose-950/40 border border-rose-500/30 rounded p-1 text-rose-200 truncate">
+                Cry: &ldquo;{selectedWaypoint.distressTranscript}&rdquo;
+              </div>
+            )}
+            <div className="text-[9px] text-emerald-400 font-sans flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              <span>Saved on map until manually removed</span>
+            </div>
           </div>
 
           <div className="flex items-center gap-1.5 pt-0.5">
             {selectedDrone && (
               <button
                 onClick={() => sendDroneToWaypoint(selectedDrone.id, selectedWaypoint.id)}
-                className="flex-1 py-1 px-2 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 rounded-md text-[11px] font-bold flex items-center justify-center gap-1 transition-colors"
+                className="flex-1 py-1.5 px-2 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 rounded-md text-[11px] font-bold flex items-center justify-center gap-1 transition-colors"
                 title={`Fly ${selectedDrone.name} to this waypoint`}
               >
                 <Navigation className="w-3 h-3" />
-                <span>Fly</span>
+                <span>Fly Drone</span>
               </button>
             )}
             <button
               onClick={() => {
                 removeWaypoint(selectedWaypoint.id);
                 setSelectedWaypointId(null);
-                setWaypointPlacedToast(`Deleted ${selectedWaypoint.name}`);
+                setWaypointPlacedToast(`Removed ${selectedWaypoint.name}`);
                 setTimeout(() => setWaypointPlacedToast(null), 3000);
               }}
-              className="py-1 px-2.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/50 rounded-md text-[11px] font-bold flex items-center justify-center gap-1 transition-colors"
-              title="Delete this waypoint"
+              className="py-1.5 px-2.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/50 rounded-md text-[11px] font-bold flex items-center justify-center gap-1 transition-colors"
+              title={selectedWaypoint.isVoiceAlert ? "Dismiss and remove this distress alert from map" : "Delete this waypoint"}
             >
               <Trash2 className="w-3 h-3 text-rose-400" />
-              <span>Delete</span>
+              <span>{selectedWaypoint.isVoiceAlert ? "Dismiss" : "Delete"}</span>
             </button>
           </div>
         </div>

@@ -46,5 +46,11 @@ export interface TacticalWaypoint {
   action: WaypointAction;
   assignedDroneId?: string | null;
   createdAt: number;
+  isVoiceAlert?: boolean;
+  alertKeyword?: string;
+  urgency?: "CRITICAL" | "HIGH" | "MEDIUM";
+  distressTranscript?: string;
+  detectionId?: string;
+  detectedTime?: string;
 }
 

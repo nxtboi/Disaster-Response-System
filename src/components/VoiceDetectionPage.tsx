@@ -244,6 +244,11 @@ export function VoiceDetectionPage() {
         altitude: 70,
         speed: 25,
         assignedDroneId: drone?.id || "DRN-01",
+        isVoiceAlert: true,
+        alertKeyword: matchedKeyword.toUpperCase(),
+        urgency,
+        distressTranscript: transcript,
+        detectedTime: new Date().toLocaleTimeString(),
       });
       createdWpId = newWp.id;
       setSelectedWaypointId(newWp.id);

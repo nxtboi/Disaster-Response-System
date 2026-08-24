@@ -192,7 +192,7 @@ export function DRSProvider({ children }: { children: ReactNode }) {
   const addWaypoint = (coords: DroneCoordinates, options?: Partial<TacticalWaypoint>): TacticalWaypoint => {
     const nextIndex = waypoints.length + 1;
     const newWp: TacticalWaypoint = {
-      id: `wp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: options?.id || `wp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       index: nextIndex,
       name: options?.name || `Waypoint ${String(nextIndex).padStart(2, "0")}`,
       coordinates: {
@@ -203,7 +203,13 @@ export function DRSProvider({ children }: { children: ReactNode }) {
       speed: options?.speed || 35,
       action: options?.action || "Fly-Through",
       assignedDroneId: options?.assignedDroneId || selectedDroneId || "DRN-01",
-      createdAt: Date.now(),
+      createdAt: options?.createdAt || Date.now(),
+      isVoiceAlert: options?.isVoiceAlert ?? (options?.name?.toLowerCase().includes("survivor") || options?.name?.toLowerCase().includes("distress")),
+      alertKeyword: options?.alertKeyword,
+      urgency: options?.urgency,
+      distressTranscript: options?.distressTranscript,
+      detectionId: options?.detectionId,
+      detectedTime: options?.detectedTime || new Date().toLocaleTimeString(),
     };
 
     setWaypoints((prev) => {

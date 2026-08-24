@@ -123,6 +123,11 @@ export function VoiceFeed() {
       altitude: 65,
       speed: 25,
       assignedDroneId: drone?.id || "DRN-01",
+      isVoiceAlert: true,
+      alertKeyword: keyword.toUpperCase(),
+      urgency: "CRITICAL",
+      distressTranscript: phrase,
+      detectedTime: new Date().toLocaleTimeString(),
     });
     setSelectedWaypointId(newWp.id);
 

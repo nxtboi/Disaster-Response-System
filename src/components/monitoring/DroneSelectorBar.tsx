@@ -1,6 +1,8 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { Drone } from "../../types";
-import { CameraLensId, CAMERA_OPTIONS } from "./LiveVideoPanel";
+import { CameraSourceInfo } from "../camera/CameraTypes";
+import { useCameraSources } from "../camera/useCameraSources";
+import { useDRS } from "../../store";
 import {
   Battery,
   BatteryCharging,
@@ -8,24 +10,19 @@ import {
   Radio,
   ChevronDown,
   Check,
-  Zap,
-  Gauge,
-  Navigation,
-  Shield,
   Video,
   Camera,
-  Layers,
-  CircleDot,
-  Sliders,
-  Disc,
+  User,
+  Users,
+  RefreshCw,
 } from "lucide-react";
 
 interface DroneSelectorBarProps {
   drones: Drone[];
   selectedDroneId: string;
   onSelectDrone: (droneId: string) => void;
-  selectedCameraId?: CameraLensId;
-  onSelectCamera?: (cameraId: CameraLensId) => void;
+  selectedCameraId?: string;
+  onSelectCamera?: (cameraId: string) => void;
   isMasterRecording?: boolean;
   onToggleMasterRecording?: () => void;
   onSnapshotAll?: () => void;
@@ -35,21 +32,63 @@ export function DroneSelectorBar({
   drones,
   selectedDroneId,
   onSelectDrone,
-  selectedCameraId = "rgb-gimbal",
+  selectedCameraId,
   onSelectCamera,
   isMasterRecording = true,
   onToggleMasterRecording,
   onSnapshotAll,
 }: DroneSelectorBarProps) {
+  const { currentUser } = useDRS();
+  const {
+    allSources,
+    isBroadcasting,
+    toggleBroadcasting,
+    switchCameraFacing,
+    facingMode,
+    activeVisitorCount,
+  } = useCameraSources(drones, false, currentUser?.username || "Operator");
+
   const [isDroneDropdownOpen, setIsDroneDropdownOpen] = useState(false);
   const [isCamDropdownOpen, setIsCamDropdownOpen] = useState(false);
+  const [camCategory, setCamCategory] = useState<"all" | "visitors" | "drone" | "cctv">("all");
   const droneDropdownRef = useRef<HTMLDivElement>(null);
   const camDropdownRef = useRef<HTMLDivElement>(null);
 
   const selectedDrone =
     drones.find((d) => d.id === selectedDroneId) || drones[0];
-  const selectedCamOption =
-    CAMERA_OPTIONS.find((c) => c.id === selectedCameraId) || CAMERA_OPTIONS[0];
+
+  // Find selected camera source info
+  const selectedCamOption: CameraSourceInfo = useMemo(() => {
+    if (!selectedCameraId) {
+      return (
+        allSources.find((s) => s.id === `${selectedDrone?.id}-rgb-gimbal`) ||
+        allSources[0]
+      );
+    }
+    const found = allSources.find((s) => s.id === selectedCameraId);
+    if (found) return found;
+
+    // Shorthand match (e.g. 'rgb-gimbal')
+    const shortFound = allSources.find(
+      (s) =>
+        s.id === `${selectedDrone?.id}-${selectedCameraId}` ||
+        s.lensType === selectedCameraId ||
+        s.id.endsWith(selectedCameraId)
+    );
+    if (shortFound) return shortFound;
+
+    return allSources[0] || {
+      id: "rgb-gimbal",
+      label: "4K RGB Gimbal (Primary)",
+      shortLabel: "4K MAIN",
+      lensType: "rgb-gimbal",
+      lensName: "4K RGB Gimbal",
+      resolution: "3840x2160",
+      fov: "84° Wide Optical",
+      status: "ONLINE",
+      sensorSpec: "1/1.3\" CMOS 48MP F/1.7",
+    };
+  }, [allSources, selectedCameraId, selectedDrone]);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -112,6 +151,13 @@ export function DroneSelectorBar({
         );
     }
   };
+
+  const filteredCamOptions = allSources.filter((cam) => {
+    if (camCategory === "visitors") return cam.lensType === "visitor-camera";
+    if (camCategory === "drone") return !!cam.droneId;
+    if (camCategory === "cctv") return cam.lensType === "ground-cctv" || cam.lensType === "device-webcam";
+    return true;
+  });
 
   return (
     <div className="bg-zinc-950/95 border-b border-zinc-800/90 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 z-30 relative backdrop-blur-md">
@@ -181,18 +227,15 @@ export function DroneSelectorBar({
             </div>
           </button>
 
-          {/* Drone Options List */}
+          {/* Drone Dropdown List */}
           {isDroneDropdownOpen && (
-            <div
-              id="active-drone-dropdown-menu"
-              className="absolute left-0 top-full mt-1.5 w-[300px] sm:w-[340px] bg-zinc-900 border border-zinc-750 rounded-xl shadow-2xl z-50 overflow-hidden backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-150"
-            >
+            <div className="absolute left-0 top-full mt-1.5 w-72 sm:w-80 bg-zinc-900 border border-zinc-750 rounded-xl shadow-2xl z-50 overflow-hidden backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-150">
               <div className="px-3 py-2 bg-zinc-950/90 border-b border-zinc-800 text-[10px] font-mono text-zinc-400 flex items-center justify-between">
-                <span>CONNECTED FLEET UNITS ({drones.length})</span>
-                <span className="text-cyan-400 font-medium">CLICK TO SWITCH</span>
+                <span>AVAILABLE FLEET DRONES</span>
+                <span className="text-cyan-400 font-bold">{drones.length} UNITS</span>
               </div>
 
-              <div className="py-1 max-h-[300px] overflow-y-auto custom-scrollbar divide-y divide-zinc-800/40">
+              <div className="py-1 max-h-72 overflow-y-auto custom-scrollbar divide-y divide-zinc-800/40">
                 {drones.map((drone) => {
                   const isSelected = drone.id === selectedDroneId;
                   return (
@@ -251,7 +294,7 @@ export function DroneSelectorBar({
           )}
         </div>
 
-        {/* 2. Camera Lens Quick Switcher Dropdown */}
+        {/* 2. Camera Lens & Visitor Device Quick Switcher Dropdown */}
         {onSelectCamera && (
           <div className="relative" ref={camDropdownRef}>
             <button
@@ -259,15 +302,29 @@ export function DroneSelectorBar({
               type="button"
               onClick={() => setIsCamDropdownOpen(!isCamDropdownOpen)}
               className="flex items-center gap-2 bg-zinc-900 hover:bg-zinc-850 border border-zinc-750 hover:border-cyan-500/60 text-zinc-100 px-3 py-1.5 rounded-lg shadow-md transition-all text-xs font-mono group"
-              title="Switch Active Camera Lens / Sensor Feed"
+              title="Switch Active Camera Lens / Visitor Device Feed"
             >
-              <Video className="w-3.5 h-3.5 text-cyan-400" />
+              {selectedCamOption.lensType === "visitor-camera" ? (
+                <User className="w-3.5 h-3.5 text-emerald-400" />
+              ) : (
+                <Video className="w-3.5 h-3.5 text-cyan-400" />
+              )}
               <div className="flex flex-col text-left">
                 <span className="text-[9px] font-mono text-zinc-500 leading-none uppercase">
-                  ACTIVE CAMERA
+                  ACTIVE CAMERA FEED
                 </span>
-                <span className="text-xs font-bold text-zinc-200 leading-tight">
-                  {selectedCamOption.shortTag}: {selectedCamOption.label.split("(")[0]}
+                <span className="text-xs font-bold text-zinc-200 leading-tight flex items-center gap-1">
+                  <span>{selectedCamOption.shortLabel}: {selectedCamOption.lensName}</span>
+                  {selectedCamOption.isSelf && (
+                    <span className="text-[8px] px-1 bg-cyan-950 text-cyan-300 rounded border border-cyan-500/40">
+                      YOU
+                    </span>
+                  )}
+                  {selectedCamOption.isRealDevice && !selectedCamOption.isSelf && (
+                    <span className="text-[8px] px-1 bg-emerald-950 text-emerald-300 rounded border border-emerald-500/40 animate-pulse">
+                      LIVE
+                    </span>
+                  )}
                 </span>
               </div>
               <ChevronDown
@@ -279,15 +336,42 @@ export function DroneSelectorBar({
 
             {/* Camera Options Menu */}
             {isCamDropdownOpen && (
-              <div className="absolute left-0 top-full mt-1.5 w-72 sm:w-80 bg-zinc-900 border border-zinc-750 rounded-xl shadow-2xl z-50 overflow-hidden backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-150">
+              <div className="absolute left-0 top-full mt-1.5 w-80 sm:w-96 bg-zinc-900 border border-zinc-750 rounded-xl shadow-2xl z-50 overflow-hidden backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-150">
                 <div className="px-3 py-2 bg-zinc-950/90 border-b border-zinc-800 text-[10px] font-mono text-zinc-400 flex items-center justify-between">
                   <span>CAMERA FEEDS & SENSORS</span>
-                  <span className="text-cyan-400 font-bold">{CAMERA_OPTIONS.length} LENSES</span>
+                  <span className="text-cyan-400 font-bold">{allSources.length} STREAMS</span>
+                </div>
+
+                {/* Filter Tabs */}
+                <div className="flex gap-1 p-1.5 bg-zinc-950/60 border-b border-zinc-800/60 overflow-x-auto custom-scrollbar">
+                  {[
+                    { id: "all", label: "All Feeds" },
+                    { id: "visitors", label: `Visitors (${activeVisitorCount})`, highlight: true },
+                    { id: "drone", label: "Drone Lenses" },
+                    { id: "cctv", label: "CCTV / WebCam" },
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setCamCategory(tab.id as any)}
+                      className={`px-2 py-1 rounded text-[9px] font-mono font-bold uppercase transition-colors shrink-0 ${
+                        camCategory === tab.id
+                          ? tab.highlight
+                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/50"
+                            : "bg-cyan-500/20 text-cyan-300 border border-cyan-500/50"
+                          : "text-zinc-400 hover:text-zinc-200 bg-zinc-900"
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
                 </div>
 
                 <div className="py-1 max-h-72 overflow-y-auto custom-scrollbar divide-y divide-zinc-800/40">
-                  {CAMERA_OPTIONS.map((cam) => {
-                    const isSelected = cam.id === selectedCameraId;
+                  {filteredCamOptions.map((cam) => {
+                    const isSelected = cam.id === selectedCamOption.id;
+                    const isCamVisitor = cam.lensType === "visitor-camera";
+
                     return (
                       <button
                         key={cam.id}
@@ -298,31 +382,58 @@ export function DroneSelectorBar({
                         }}
                         className={`w-full flex items-center justify-between px-3 py-2 text-left transition-colors ${
                           isSelected
-                            ? "bg-cyan-500/15 text-zinc-100"
+                            ? isCamVisitor
+                              ? "bg-emerald-500/15 text-emerald-100"
+                              : "bg-cyan-500/15 text-zinc-100"
                             : "hover:bg-zinc-800/70 text-zinc-300 hover:text-white"
                         }`}
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <div
                             className={`w-1 h-7 rounded-full shrink-0 ${
-                              isSelected ? "bg-cyan-400" : "bg-transparent"
+                              isSelected
+                                ? isCamVisitor
+                                  ? "bg-emerald-400"
+                                  : "bg-cyan-400"
+                                : "bg-transparent"
                             }`}
                           />
                           <div className="flex flex-col min-w-0">
-                            <span className="text-xs font-bold text-zinc-100 truncate">
-                              {cam.label}
-                            </span>
-                            <span className="text-[10px] font-mono text-cyan-400/90 truncate">
-                              {cam.sensor}
+                            <div className="flex items-center gap-1.5">
+                              {isCamVisitor && <User className="w-3 h-3 text-emerald-400 shrink-0" />}
+                              <span className="text-xs font-bold text-zinc-100 truncate">
+                                {cam.label}
+                              </span>
+                              {cam.isSelf && (
+                                <span className="text-[8px] px-1 bg-cyan-950 text-cyan-300 rounded border border-cyan-500/40">
+                                  YOU
+                                </span>
+                              )}
+                              {cam.isRealDevice && !cam.isSelf && (
+                                <span className="text-[8px] px-1 bg-emerald-950 text-emerald-400 rounded border border-emerald-500/40 animate-pulse">
+                                  LIVE
+                                </span>
+                              )}
+                            </div>
+                            <span
+                              className={`text-[10px] font-mono truncate ${
+                                isCamVisitor ? "text-emerald-400/90" : "text-cyan-400/90"
+                              }`}
+                            >
+                              {cam.sensorSpec}
                             </span>
                             <span className="text-[9px] font-mono text-zinc-500">
-                              {cam.resolution} • {cam.fps}FPS • {cam.fov}
+                              {cam.resolution} • {cam.fov}
                             </span>
                           </div>
                         </div>
 
                         {isSelected && (
-                          <Check className="w-4 h-4 text-cyan-400 shrink-0 ml-2" />
+                          <Check
+                            className={`w-4 h-4 shrink-0 ml-2 ${
+                              isCamVisitor ? "text-emerald-400" : "text-cyan-400"
+                            }`}
+                          />
                         )}
                       </button>
                     );
@@ -332,6 +443,36 @@ export function DroneSelectorBar({
             )}
           </div>
         )}
+
+        {/* Quick Broadcast / Share Cam Button */}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={toggleBroadcasting}
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-mono flex items-center gap-1.5 border transition-colors shadow-sm ${
+              isBroadcasting
+                ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/60 font-bold animate-pulse"
+                : "bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-zinc-750 hover:text-white"
+            }`}
+            title={
+              isBroadcasting
+                ? "Broadcasting camera to other devices (Click to Stop)"
+                : "Broadcast this device's camera to all other connected screens"
+            }
+          >
+            <Radio className={`w-3.5 h-3.5 ${isBroadcasting ? "text-emerald-400" : "text-zinc-400"}`} />
+            <span>{isBroadcasting ? "BROADCASTING" : "BROADCAST CAM"}</span>
+          </button>
+
+          {isBroadcasting && (
+            <button
+              onClick={switchCameraFacing}
+              className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-750 text-zinc-400 hover:text-cyan-300 hover:bg-zinc-800 transition-colors"
+              title={`Flip Camera (${facingMode === "user" ? "Front" : "Rear"})`}
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Right Controls: Quick Snapshot + Live Telemetry */}

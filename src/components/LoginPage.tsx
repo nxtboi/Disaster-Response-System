@@ -35,12 +35,6 @@ const AUTHORIZED_ACCOUNTS: AuthorizedCredential[] = [
     role: "operator",
     label: "Tactical Fleet Operator",
   },
-  {
-    username: "operator",
-    password: "Vijay@147896",
-    role: "operator",
-    label: "Tactical Fleet Operator",
-  },
 ];
 
 function getCustomAccounts(): AuthorizedCredential[] {

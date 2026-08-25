@@ -38,7 +38,7 @@ export function AdminPanel({
   const [searchQuery, setSearchQuery] = useState("");
   const [executionLogs, setExecutionLogs] = useState<string[]>([
     "[SYS_INIT] DRS Admin VibeCoding Engine v2.4 initialized.",
-    "[AUTH] Administrator session authenticated for user: admin (Vijay).",
+    "[AUTH] Administrator session authenticated for user: admin.",
     "[FS_LOAD] 5 core system files mounted in virtual project workspace.",
   ]);
 
@@ -169,7 +169,7 @@ export function AdminPanel({
           </div>
           <div className="hidden md:flex items-center gap-2 text-xs">
             <span className="text-zinc-500">•</span>
-            <span className="text-zinc-400">OPERATOR: <strong className="text-white">admin (Vijay)</strong></span>
+            <span className="text-zinc-400">OPERATOR: <strong className="text-white">admin</strong></span>
             <span className="text-zinc-500">•</span>
             <span className="text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30 text-[10px] font-bold">
               CLEARANCE: LVL 5

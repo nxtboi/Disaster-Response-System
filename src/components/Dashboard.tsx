@@ -8,11 +8,13 @@ import { motion } from "motion/react";
 export function Dashboard({ 
   onExit,
   onOpenAdminPanel,
+  onOpenLoginPage,
   onLogout,
   userRole = "operator",
 }: { 
   onExit?: () => void;
   onOpenAdminPanel?: () => void;
+  onOpenLoginPage?: () => void;
   onLogout?: () => void;
   userRole?: "admin" | "operator";
 }) {
@@ -25,7 +27,11 @@ export function Dashboard({
       transition={{ duration: 0.8 }}
       className="flex h-screen w-full bg-zinc-950 overflow-hidden"
     >
-      <Sidebar onExit={onExit} onOpenAdminPanel={onOpenAdminPanel} />
+      <Sidebar 
+        onExit={onExit} 
+        onOpenAdminPanel={onOpenAdminPanel} 
+        onOpenLoginPage={onOpenLoginPage} 
+      />
       <div className="flex-1 flex flex-col min-w-0 relative">
         <Header 
           userRole={userRole} 

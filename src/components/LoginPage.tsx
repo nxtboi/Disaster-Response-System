@@ -50,7 +50,13 @@ function getCustomAccounts(): AuthorizedCredential[] {
   return [];
 }
 
-export function LoginPage({ onLogin }: { onLogin: (role: "admin" | "operator", username: string) => void }) {
+export function LoginPage({ 
+  onLogin,
+  onCancel,
+}: { 
+  onLogin: (role: "admin" | "operator", username: string) => void;
+  onCancel?: () => void;
+}) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isAuthenticating, setIsAuthenticating] = useState(false);
@@ -115,7 +121,17 @@ export function LoginPage({ onLogin }: { onLogin: (role: "admin" | "operator", u
         transition={{ duration: 0.5, ease: "easeOut" }}
         className="relative z-10 w-full max-w-md px-4"
       >
-        <div className="bg-zinc-950/85 backdrop-blur-xl border border-cyan-500/30 rounded-2xl p-8 shadow-[0_0_40px_rgba(6,182,212,0.15)]">
+        <div className="relative bg-zinc-950/85 backdrop-blur-xl border border-cyan-500/30 rounded-2xl p-8 shadow-[0_0_40px_rgba(6,182,212,0.15)]">
+          {onCancel && (
+            <button
+              onClick={onCancel}
+              type="button"
+              className="absolute top-4 right-4 text-xs font-mono text-zinc-400 hover:text-cyan-300 px-2 py-1 rounded border border-zinc-800 hover:border-cyan-500/40 bg-zinc-900/60 transition-all"
+              title="Return to Command Center"
+            >
+              ESC / BACK
+            </button>
+          )}
           <div className="flex flex-col items-center mb-6">
             <motion.div
               animate={{ rotate: 360 }}

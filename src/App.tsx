@@ -5,14 +5,13 @@
 
 import { useState, useEffect } from "react";
 import { DRSProvider, useDRS } from "./store";
-// Temporary bypass of LoginPage while login gate is disabled
-// import { LoginPage } from "./components/LoginPage";
+import { LoginPage } from "./components/LoginPage";
 import { LandingPage } from "./components/LandingPage";
 import { Dashboard } from "./components/Dashboard";
 import { ExploreSystemPage } from "./components/ExploreSystemPage";
 import { AdminPanel } from "./components/admin/AdminPanel";
 
-export type AppPage = "landing" | "command_center" | "explore_system" | "admin_panel";
+export type AppPage = "landing" | "command_center" | "explore_system" | "admin_panel" | "login";
 
 const AUTH_STORAGE_KEY = "drs_auth_session";
 
@@ -82,14 +81,42 @@ function AppContent() {
     }
   }, [userRole, currentPage, currentUser?.username]);
 
+  const handleLogin = (role: "admin" | "operator", username: string) => {
+    const cleanUsername = username.trim() || (role === "admin" ? "admin" : "operator");
+    const targetPage: AppPage = role === "admin" ? "admin_panel" : "command_center";
+
+    setIsAuthenticated(true);
+    setUserRole(role);
+    setCurrentPage(targetPage);
+    setCurrentUser({ username: cleanUsername, role });
+
+    const sessionData: StoredAuthSession = {
+      isAuthenticated: true,
+      role,
+      username: cleanUsername,
+      lastPage: targetPage,
+      timestamp: Date.now(),
+    };
+    try {
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(sessionData));
+      localStorage.setItem("drs_current_user", JSON.stringify({ username: cleanUsername, role }));
+    } catch (_) {}
+  };
+
   const handleLogout = () => {
-    // Return to Landing Page smoothly
-    setCurrentPage("landing");
+    // Navigate to Login Page
+    setCurrentPage("login");
+    setCurrentUser({ username: "operator", role: "operator" });
   };
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-cyan-500/30 overflow-hidden">
-      {currentPage === "admin_panel" ? (
+      {currentPage === "login" ? (
+        <LoginPage
+          onLogin={handleLogin}
+          onCancel={() => setCurrentPage("command_center")}
+        />
+      ) : currentPage === "admin_panel" ? (
         <AdminPanel
           onLaunchCommandCenter={() => setCurrentPage("command_center")}
           onExploreSystem={() => setCurrentPage("explore_system")}
@@ -120,6 +147,7 @@ function AppContent() {
             }
           }}
           onOpenAdminPanel={userRole === "admin" ? () => setCurrentPage("admin_panel") : undefined}
+          onOpenLoginPage={() => setCurrentPage("login")}
         />
       )}
     </div>

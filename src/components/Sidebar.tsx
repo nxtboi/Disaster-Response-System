@@ -4,7 +4,7 @@ import { cn } from "../lib/utils";
 import { 
   Crosshair, Navigation, Video, Activity, Map as MapIcon, 
   Radio, Target, AlertTriangle, Settings, Plus, LayoutDashboard, LogOut, Cpu, Route,
-  Trash2, X, ShieldAlert, Sparkles, Check, ChevronRight, Zap, Mic
+  Trash2, X, ShieldAlert, Sparkles, Check, ChevronRight, Zap, Mic, Lock
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { ConnectionStatus, Drone } from "../types";
@@ -59,10 +59,12 @@ const PRESET_ROLES = [
 
 export function Sidebar({ 
   onExit, 
-  onOpenAdminPanel 
+  onOpenAdminPanel,
+  onOpenLoginPage,
 }: { 
   onExit?: () => void; 
   onOpenAdminPanel?: () => void; 
+  onOpenLoginPage?: () => void;
 }) {
   const { 
     drones, 
@@ -154,15 +156,15 @@ export function Sidebar({
             <Crosshair className="w-6 h-6" />
             <span className="font-bold tracking-widest text-lg">DRS</span>
           </div>
-          {onOpenAdminPanel && (
-            <button
-              onClick={onOpenAdminPanel}
-              className="px-2 py-1 rounded bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 text-[10px] font-mono font-bold transition-all"
-              title="Open Admin VibeCoding Panel"
-            >
-              ADMIN IDE
-            </button>
-          )}
+          <button
+            id="sidebar-login-button"
+            onClick={onOpenLoginPage || onOpenAdminPanel}
+            className="px-2.5 py-1 rounded bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 text-[10px] font-mono font-bold transition-all flex items-center gap-1.5 active:scale-95 whitespace-nowrap"
+            title="Open Admin Panel Login"
+          >
+            <Lock className="w-3 h-3 text-cyan-400" />
+            <span>Admin Panel Login</span>
+          </button>
         </div>
 
         {/* Primary View Navigation */}

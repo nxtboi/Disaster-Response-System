@@ -9,6 +9,8 @@ export function HardwareConnection() {
   
   // Connection states
   const [serialConnected, setSerialConnected] = useState(false);
+  const [baudRate, setBaudRate] = useState<number>(256000);
+  const [customBaud, setCustomBaud] = useState<string>("");
   const [wsConnected, setWsConnected] = useState(false);
   const [wsUrl, setWsUrl] = useState("ws://192.168.1.100:81");
   const [logs, setLogs] = useState<{ time: string; msg: string; isError?: boolean }[]>([]);
@@ -64,13 +66,15 @@ export function HardwareConnection() {
       return;
     }
     
+    const activeBaud = customBaud && !isNaN(Number(customBaud)) ? Number(customBaud) : baudRate;
+    
     try {
       // @ts-ignore
       const port = await navigator.serial.requestPort();
-      await port.open({ baudRate: 115200 });
+      await port.open({ baudRate: activeBaud });
       portRef.current = port;
       setSerialConnected(true);
-      addLog("Serial port opened at 115200 baud.");
+      addLog(`Serial port opened successfully at ${activeBaud} baud.`);
       
       const decoder = new TextDecoderStream();
       port.readable.pipeTo(decoder.writable).catch(() => {});
@@ -180,10 +184,52 @@ export function HardwareConnection() {
             )}
           </div>
           <p className="text-xs text-zinc-400 leading-relaxed">
-            Connect via USB-to-TTL, Arduino, or direct ESP32 USB. Ensure baud rate is set to <strong>115200</strong>.
+            Connect via USB-to-TTL, Arduino, Pixhawk, or direct ESP32 USB. Select your telemetry baud rate below.
           </p>
+
+          <div className="flex flex-col gap-2 bg-zinc-950/70 p-3 rounded-lg border border-zinc-800">
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-mono text-zinc-400 uppercase font-semibold">Baud Rate:</label>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 font-bold">
+                {(customBaud ? customBaud : baudRate).toLocaleString()} BAUD
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {[256000, 115200, 921600, 460800, 57600, 9600].map((rate) => (
+                <button
+                  key={rate}
+                  type="button"
+                  disabled={serialConnected}
+                  onClick={() => {
+                    setBaudRate(rate);
+                    setCustomBaud("");
+                  }}
+                  className={cn(
+                    "px-2 py-1 text-[11px] font-mono rounded border transition-all text-center",
+                    baudRate === rate && !customBaud
+                      ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/50 font-bold shadow-sm"
+                      : "bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200 hover:border-zinc-700",
+                    serialConnected && "opacity-50 cursor-not-allowed"
+                  )}
+                >
+                  {rate === 256000 ? "256000 (Fast)" : rate}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-[10px] text-zinc-500 font-mono">Custom:</span>
+              <input
+                type="number"
+                placeholder="e.g. 256000"
+                value={customBaud}
+                disabled={serialConnected}
+                onChange={(e) => setCustomBaud(e.target.value)}
+                className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-200 font-mono focus:outline-none focus:border-cyan-500 disabled:opacity-50"
+              />
+            </div>
+          </div>
           
-          <div className="mt-auto pt-4">
+          <div className="mt-auto pt-2">
             {!serialConnected ? (
               <button
                 onClick={connectSerial}

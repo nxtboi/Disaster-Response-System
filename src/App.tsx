@@ -103,10 +103,9 @@ function AppContent() {
     } catch (_) {}
   };
 
-  const handleLogout = () => {
-    // Navigate to Login Page
-    setCurrentPage("login");
-    setCurrentUser({ username: "operator", role: "operator" });
+  const handleGoHome = () => {
+    // Navigate to Home / Landing Page
+    setCurrentPage("landing");
   };
 
   return (
@@ -120,7 +119,7 @@ function AppContent() {
         <AdminPanel
           onLaunchCommandCenter={() => setCurrentPage("command_center")}
           onExploreSystem={() => setCurrentPage("explore_system")}
-          onLogout={handleLogout}
+          onLogout={handleGoHome}
         />
       ) : currentPage === "landing" ? (
         <LandingPage
@@ -133,12 +132,12 @@ function AppContent() {
           onBackToHome={() => (userRole === "admin" ? setCurrentPage("admin_panel") : setCurrentPage("landing"))}
           onSelectDroneAndMonitor={() => setCurrentPage("command_center")}
           userRole={userRole}
-          onLogout={handleLogout}
+          onLogout={handleGoHome}
         />
       ) : (
         <Dashboard
           userRole={userRole}
-          onLogout={handleLogout}
+          onLogout={handleGoHome}
           onExit={() => {
             if (userRole === "admin") {
               setCurrentPage("admin_panel");

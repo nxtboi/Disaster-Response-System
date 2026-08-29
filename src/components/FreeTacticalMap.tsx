@@ -7,23 +7,86 @@ interface FreeTacticalMapProps {
   onRecenter?: () => void;
 }
 
-type TileStyle = 'dark' | 'satellite' | 'street';
+type TileStyle = 'dark' | 'satellite' | 'street' | 'topo' | 'light' | 'esri_street' | 'esri_topo' | 'voyager' | 'cyclosm';
 
-const TILE_SERVERS: Record<TileStyle, { url: string; attribution: string; maxZoom: number }> = {
+const TILE_SERVERS: Record<TileStyle, { url: string; attribution: string; maxZoom: number; label: string; subtext: string; category: string; subdomains?: string }> = {
   dark: {
     url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    attribution: '&copy; OpenStreetMap &copy; CARTO',
     maxZoom: 19,
+    label: 'Dark Matter',
+    subtext: 'Tactical Dark',
+    category: 'Tactical',
+    subdomains: 'abcd',
   },
   satellite: {
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{x}/{y}',
+    attribution: 'Tiles &copy; Esri, USDA, USGS, AeroGRID, IGN',
     maxZoom: 18,
+    label: 'Satellite HD',
+    subtext: 'Esri World Imagery',
+    category: 'Aerial',
   },
   street: {
     url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    attribution: '&copy; OpenStreetMap contributors',
     maxZoom: 19,
+    label: 'OpenStreetMap',
+    subtext: 'Global Standard',
+    category: 'Roads',
+    subdomains: 'abc',
+  },
+  topo: {
+    url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; OpenStreetMap &copy; OpenTopoMap',
+    maxZoom: 17,
+    label: 'Topographic',
+    subtext: 'Terrain Elevation',
+    category: 'Terrain',
+    subdomains: 'abc',
+  },
+  light: {
+    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; OpenStreetMap &copy; CARTO',
+    maxZoom: 19,
+    label: 'Positron Light',
+    subtext: 'Clean High-Contrast',
+    category: 'Roads',
+    subdomains: 'abcd',
+  },
+  esri_street: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{x}/{y}',
+    attribution: 'Tiles &copy; Esri, DeLorme, NAVTEQ',
+    maxZoom: 19,
+    label: 'Esri World Street',
+    subtext: 'Highways & Landmarks',
+    category: 'Roads',
+  },
+  esri_topo: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{x}/{y}',
+    attribution: 'Tiles &copy; Esri, USGS, NOAA',
+    maxZoom: 19,
+    label: 'Esri Topo Relief',
+    subtext: 'Landforms & Relief',
+    category: 'Terrain',
+  },
+  voyager: {
+    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; OpenStreetMap &copy; CARTO',
+    maxZoom: 19,
+    label: 'CARTO Voyager',
+    subtext: 'Vibrant Hybrid View',
+    category: 'Tactical',
+    subdomains: 'abcd',
+  },
+  cyclosm: {
+    url: 'https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
+    attribution: '&copy; OpenStreetMap contributors &copy; CyclOSM',
+    maxZoom: 19,
+    label: 'CyclOSM Trails',
+    subtext: 'Outdoor & SAR Paths',
+    category: 'Outdoor',
+    subdomains: 'abc',
   },
 };
 
@@ -130,7 +193,7 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
     const tileLayer = L.tileLayer(tileConfig.url, {
       attribution: tileConfig.attribution,
       maxZoom: tileConfig.maxZoom,
-      subdomains: 'abcd',
+      subdomains: tileConfig.subdomains || 'abc',
     }).addTo(map);
 
     tileLayerRef.current = tileLayer;
@@ -232,7 +295,7 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
     const newTileLayer = L.tileLayer(tileConfig.url, {
       attribution: tileConfig.attribution,
       maxZoom: tileConfig.maxZoom,
-      subdomains: 'abcd',
+      subdomains: tileConfig.subdomains || 'abc',
     }).addTo(map);
 
     tileLayerRef.current = newTileLayer;
@@ -624,8 +687,8 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
         <div className="bg-zinc-950/85 backdrop-blur-md border border-cyan-500/30 px-3 py-1.5 rounded-lg shadow-xl flex items-center gap-2 text-xs font-mono">
           <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
           <span className="text-zinc-300 font-bold">TACTICAL RADAR</span>
-          <span className="text-[10px] text-cyan-400 bg-cyan-950/80 px-1.5 py-0.5 rounded border border-cyan-500/30">
-            FREE / OPEN SOURCE
+          <span className="text-[10px] text-emerald-400 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-500/30 font-bold">
+            ONLINE
           </span>
         </div>
 
@@ -692,57 +755,45 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
         <div className="relative">
           <button
             onClick={() => setShowLayerMenu(!showLayerMenu)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-900/85 hover:bg-zinc-800 border border-zinc-700/80 text-zinc-200 text-xs font-mono font-medium backdrop-blur-md shadow-xl transition-colors"
-            title="Switch Map Tiles"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-700/80 hover:border-cyan-500/50 text-zinc-200 text-xs font-mono font-medium backdrop-blur-md shadow-xl transition-all"
+            title="Switch Free Map Provider"
           >
             <Layers className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="capitalize">{tileStyle} Layer</span>
+            <span className="font-semibold">{TILE_SERVERS[tileStyle]?.label || 'Map Layer'}</span>
           </button>
 
           {showLayerMenu && (
-            <div className="absolute right-0 mt-1.5 w-44 bg-zinc-950/95 border border-zinc-800 rounded-lg p-1.5 shadow-2xl backdrop-blur-xl flex flex-col gap-1 z-50">
-              <button
-                onClick={() => {
-                  setTileStyle('dark');
-                  setShowLayerMenu(false);
-                }}
-                className={`flex items-center justify-between px-2.5 py-1.5 rounded text-xs font-mono transition-colors ${
-                  tileStyle === 'dark'
-                    ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/30'
-                    : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
-                }`}
-              >
-                <span>Dark Matter</span>
-                <span className="text-[9px] text-zinc-500 font-normal">Tactical</span>
-              </button>
-              <button
-                onClick={() => {
-                  setTileStyle('satellite');
-                  setShowLayerMenu(false);
-                }}
-                className={`flex items-center justify-between px-2.5 py-1.5 rounded text-xs font-mono transition-colors ${
-                  tileStyle === 'satellite'
-                    ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/30'
-                    : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
-                }`}
-              >
-                <span>Satellite</span>
-                <span className="text-[9px] text-zinc-500 font-normal">Esri HD</span>
-              </button>
-              <button
-                onClick={() => {
-                  setTileStyle('street');
-                  setShowLayerMenu(false);
-                }}
-                className={`flex items-center justify-between px-2.5 py-1.5 rounded text-xs font-mono transition-colors ${
-                  tileStyle === 'street'
-                    ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/30'
-                    : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
-                }`}
-              >
-                <span>OpenStreetMap</span>
-                <span className="text-[9px] text-zinc-500 font-normal">Standard</span>
-              </button>
+            <div className="absolute right-0 mt-1.5 w-60 max-h-96 overflow-y-auto bg-zinc-950/95 border border-zinc-800 rounded-xl p-2 shadow-2xl backdrop-blur-xl flex flex-col gap-1 z-50">
+              <div className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-bold border-b border-zinc-800/80 mb-1 flex items-center justify-between">
+                <span>Free Tile Providers</span>
+                <span className="text-emerald-400 font-semibold">100% Free</span>
+              </div>
+              {(Object.keys(TILE_SERVERS) as TileStyle[]).map((key) => {
+                const config = TILE_SERVERS[key];
+                const isActive = tileStyle === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => {
+                      setTileStyle(key);
+                      setShowLayerMenu(false);
+                    }}
+                    className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-mono transition-all ${
+                      isActive
+                        ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40 shadow-sm'
+                        : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
+                    }`}
+                  >
+                    <div className="flex flex-col text-left">
+                      <span className="font-medium text-[11px]">{config.label}</span>
+                      <span className="text-[9px] text-zinc-500">{config.subtext}</span>
+                    </div>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-800 shrink-0">
+                      {config.category}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>

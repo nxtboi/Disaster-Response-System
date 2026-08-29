@@ -1,7 +1,7 @@
 import { useDRS } from "../store";
 import { 
   Clock, MapPin, Loader2, PanelRight, PanelRightClose, 
-  LogOut
+  Home
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -98,16 +98,16 @@ export function Header({
           {time.toLocaleTimeString('en-US', { hour12: false })} UTC
         </div>
 
-        {/* Direct Logout Button */}
+        {/* Direct Home Navigation Button */}
         {onLogout && (
           <button
             id="header-logout-button"
             onClick={onLogout}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 hover:border-rose-500/50 text-rose-300 hover:text-rose-200 text-xs font-mono font-semibold transition-all group shadow-sm"
-            title="Log Out / End Session"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900/80 hover:bg-cyan-500/10 border border-zinc-800 hover:border-cyan-500/40 text-zinc-300 hover:text-cyan-300 text-xs font-mono font-semibold transition-all group shadow-sm active:scale-95"
+            title="Return to Home Page"
           >
-            <LogOut className="w-3.5 h-3.5 text-rose-400 group-hover:-translate-x-0.5 transition-transform" />
-            <span>LOGOUT</span>
+            <Home className="w-3.5 h-3.5 text-zinc-400 group-hover:text-cyan-400 transition-colors" />
+            <span>HOME</span>
           </button>
         )}
 

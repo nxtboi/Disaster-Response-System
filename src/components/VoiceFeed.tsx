@@ -135,10 +135,12 @@ export function VoiceFeed() {
       addAlert(drone.id, `[GNANI.AI VOICE] Survivor distress cry "${keyword.toUpperCase()}" pinned at current GPS [${pinCoords.lat}, ${pinCoords.lng}]`);
     }
 
+    // Always navigate the map to the location pinned by Gnani AI
+    setActiveView("Dashboard");
     setCenterMapTarget({
       lat: pinCoords.lat,
       lng: pinCoords.lng,
-      zoom: 17,
+      zoom: 18,
       timestamp: Date.now(),
     });
 

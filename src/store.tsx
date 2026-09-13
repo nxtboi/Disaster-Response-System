@@ -220,6 +220,18 @@ export function DRSProvider({ children }: { children: ReactNode }) {
       return updated;
     });
     setSelectedWaypointId(newWp.id);
+
+    // Always navigate the map to the location pinned by Gnani AI voice detection
+    if (newWp.isVoiceAlert) {
+      setActiveView("Dashboard");
+      setCenterMapTarget({
+        lat: newWp.coordinates.lat,
+        lng: newWp.coordinates.lng,
+        zoom: 18,
+        timestamp: Date.now(),
+      });
+    }
+
     return newWp;
   };
 

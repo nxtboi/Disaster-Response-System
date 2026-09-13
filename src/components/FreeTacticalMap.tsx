@@ -281,14 +281,15 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
       if (mapInstanceRef.current) {
         mapInstanceRef.current.invalidateSize();
         if (centerMapTarget) {
-          mapInstanceRef.current.setView(
+          setIsTracking(false);
+          mapInstanceRef.current.flyTo(
             [centerMapTarget.lat, centerMapTarget.lng],
-            centerMapTarget.zoom || 16,
-            { animate: false }
+            centerMapTarget.zoom || 18,
+            { duration: 0.8 }
           );
         }
       }
-    }, 120);
+    }, 150);
 
     map.on('dragstart', () => {
       setIsTracking(false);
@@ -347,14 +348,16 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
     };
   }, []);
 
-  // Respond to centerMapTarget triggers (e.g. GPS update or Deploy fleet)
+  // Respond to centerMapTarget triggers (e.g. Gnani AI distress pinpoint or GPS update)
   useEffect(() => {
     if (centerMapTarget && mapInstanceRef.current) {
-      mapInstanceRef.current.invalidateSize();
-      mapInstanceRef.current.setView(
+      setIsTracking(false);
+      const map = mapInstanceRef.current;
+      map.invalidateSize();
+      map.flyTo(
         [centerMapTarget.lat, centerMapTarget.lng],
-        centerMapTarget.zoom || 16,
-        { animate: true }
+        centerMapTarget.zoom || 18,
+        { duration: 1.0 }
       );
     }
   }, [centerMapTarget]);

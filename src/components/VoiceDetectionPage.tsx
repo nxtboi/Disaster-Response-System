@@ -294,22 +294,16 @@ export function VoiceDetectionPage() {
       });
       createdWpId = newWp.id;
       setSelectedWaypointId(newWp.id);
-      
-      // Auto-center map on new distress pinpoint
-      setCenterMapTarget({
-        lat: survivorCoords.lat,
-        lng: survivorCoords.lng,
-        zoom: 17,
-        timestamp: Date.now(),
-      });
-
-      // Auto-switch to Dashboard page map if enabled
-      if (autoSwitchToMap) {
-        setTimeout(() => {
-          setActiveView("Dashboard");
-        }, 1200);
-      }
     }
+
+    // Always navigate the map to the location pinned by Gnani AI
+    setActiveView("Dashboard");
+    setCenterMapTarget({
+      lat: survivorCoords.lat,
+      lng: survivorCoords.lng,
+      zoom: 18,
+      timestamp: Date.now(),
+    });
 
     // 2. Add System Alert
     const alertMsg = `[GNANI.AI VOICE] Survivor vocal distress "${matchedKeyword.toUpperCase()}" [${detectedLanguage}] localized at GPS [${survivorCoords.lat}, ${survivorCoords.lng}]. Waypoint pinned.`;
@@ -363,6 +357,9 @@ export function VoiceDetectionPage() {
     sendDroneToWaypoint,
     speakResponseToSurvivor,
     requestUserLocation,
+    setActiveView,
+    setCenterMapTarget,
+    setSelectedWaypointId,
   ]);
 
   // Analyze text transcript for distress keywords via Gnani.ai Intelligence
@@ -1455,18 +1452,21 @@ export function VoiceDetectionPage() {
                     <td className="py-2.5 px-3 text-right">
                       <button
                         onClick={() => {
+                          if (evt.waypointId) {
+                            setSelectedWaypointId(evt.waypointId);
+                          }
                           setCenterMapTarget({
                             lat: evt.coordinates.lat,
                             lng: evt.coordinates.lng,
-                            zoom: 17,
+                            zoom: 18,
                             timestamp: Date.now(),
                           });
                           setActiveView("Dashboard");
                         }}
-                        className="px-2.5 py-1 rounded bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-300 font-bold text-[10px] transition-all inline-flex items-center gap-1"
+                        className="px-2.5 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/50 text-rose-300 font-bold text-[10px] transition-all inline-flex items-center gap-1 shadow-sm"
                       >
-                        <MapPin className="w-3 h-3" />
-                        <span>MAP</span>
+                        <MapPin className="w-3 h-3 text-rose-400" />
+                        <span>NAVIGATE MAP</span>
                       </button>
                     </td>
                   </tr>

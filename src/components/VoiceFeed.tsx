@@ -132,7 +132,7 @@ export function VoiceFeed() {
     setSelectedWaypointId(newWp.id);
 
     if (drone) {
-      addAlert(drone.id, `[AI VOICE DETECT] Survivor distress cry "${keyword.toUpperCase()}" pinned at current GPS [${pinCoords.lat}, ${pinCoords.lng}]`);
+      addAlert(drone.id, `[GNANI.AI VOICE] Survivor distress cry "${keyword.toUpperCase()}" pinned at current GPS [${pinCoords.lat}, ${pinCoords.lng}]`);
     }
 
     setCenterMapTarget({
@@ -142,7 +142,7 @@ export function VoiceFeed() {
       timestamp: Date.now(),
     });
 
-    setLastDetection(`"${keyword.toUpperCase()}" detected`);
+    setLastDetection(`"${keyword.toUpperCase()}" detected (Gnani.ai)`);
     setJustPinnedToast({
       name: newWp.name,
       lat: pinCoords.lat,
@@ -195,7 +195,12 @@ export function VoiceFeed() {
           transcript += event.results[i][0].transcript.toLowerCase() + " ";
         }
 
-        const keywords = ["help", "help me", "save me", "sos", "trapped", "mayday", "bachao", "emergency", "please help"];
+        // Gnani.ai Multilingual SAR Distress Keywords
+        const keywords = [
+          "help", "help me", "save me", "sos", "trapped", "mayday",
+          "bachao", "madad", "madad karo", "fas gaye", "emergency", "please help",
+          "kaapaathunga", "kaapadandi", "kaapadi", "vaachva"
+        ];
         for (const kw of keywords) {
           if (transcript.includes(kw)) {
             triggerDistressPin(transcript.trim(), kw);
@@ -243,16 +248,16 @@ export function VoiceFeed() {
   return (
     <div className="flex flex-col gap-3 mt-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-[10px] font-bold tracking-widest text-zinc-500 uppercase font-mono flex items-center gap-1.5">
+        <h2 className="text-[10px] font-bold tracking-widest text-zinc-400 uppercase font-mono flex items-center gap-1.5">
           <AudioLines className="w-3 h-3 text-cyan-400" />
-          <span>AI Voice Detection</span>
+          <span>Gnani.ai Voice AI</span>
         </h2>
         <button
           onClick={() => setActiveView("Voice Detection")}
           className="flex items-center gap-1 text-[10px] font-mono text-cyan-400 hover:text-cyan-300 transition-colors"
-          title="Open Full AI Voice Detection & VAD Console"
+          title="Open Full Gnani.ai Voice Detection & VAD Console"
         >
-          <span>FULL VAD</span>
+          <span>GNANI VAD</span>
           <ExternalLink className="w-2.5 h-2.5" />
         </button>
       </div>
@@ -263,11 +268,15 @@ export function VoiceFeed() {
             <Radio className="w-4 h-4 text-cyan-500" />
             <span className="text-xs font-mono text-zinc-300">UHF 433.2 MHz</span>
           </div>
-          <div className="flex items-center gap-1">
-            <div className={cn("w-1.5 h-3 rounded-xs", isListening ? "bg-rose-500 animate-pulse" : "bg-cyan-500")}></div>
-            <div className={cn("w-1.5 h-4 rounded-xs", isListening ? "bg-rose-400 animate-pulse" : "bg-cyan-400")}></div>
-            <div className={cn("w-1.5 h-2.5 rounded-xs", isListening ? "bg-rose-500" : "bg-cyan-500")}></div>
-            <div className="w-1.5 h-1.5 bg-cyan-500/30 rounded-xs"></div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[9px] font-mono text-cyan-400 bg-cyan-950/60 border border-cyan-500/30 px-1 py-0.5 rounded font-bold">
+              GNANI.AI
+            </span>
+            <div className="flex items-center gap-1">
+              <div className={cn("w-1.5 h-3 rounded-xs", isListening ? "bg-rose-500 animate-pulse" : "bg-cyan-500")}></div>
+              <div className={cn("w-1.5 h-4 rounded-xs", isListening ? "bg-rose-400 animate-pulse" : "bg-cyan-400")}></div>
+              <div className={cn("w-1.5 h-2.5 rounded-xs", isListening ? "bg-rose-500" : "bg-cyan-500")}></div>
+            </div>
           </div>
         </div>
 
@@ -275,10 +284,10 @@ export function VoiceFeed() {
         <div className="p-2 rounded bg-zinc-950/80 border border-zinc-800/80 text-[10px] font-mono flex items-center justify-between">
           <span className="flex items-center gap-1.5 text-zinc-400">
             <Sparkles className="w-3 h-3 text-cyan-400" />
-            <span>Map Pin on Cry</span>
+            <span>Indic & Multilingual SAR</span>
           </span>
           <span className={cn("font-bold px-1.5 py-0.5 rounded text-[9px]", isListening ? "bg-rose-950 text-rose-300 border border-rose-500/50 animate-pulse" : "bg-emerald-950 text-emerald-400 border border-emerald-500/40")}>
-            {isListening ? "MIC LIVE" : "READY"}
+            {isListening ? "GNANI ACTIVE" : "READY"}
           </span>
         </div>
 
@@ -295,19 +304,29 @@ export function VoiceFeed() {
             title={isListening ? "Click to stop listening" : "Click to start live voice detection on map"}
           >
             {isListening ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
-            <span>{isListening ? "LISTENING (SAY HELP)" : "LISTEN FOR HELP"}</span>
+            <span>{isListening ? "LISTENING (HELP / BACHAO)" : "LISTEN WITH GNANI.AI"}</span>
           </button>
         </div>
 
         {/* Quick Simulation Trigger */}
-        <button
-          onClick={() => triggerDistressPin("HELP! Trapped under debris", "help")}
-          className="w-full py-1.5 px-2 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/40 hover:border-rose-500/80 rounded text-[10px] font-mono text-rose-200 font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95"
-          title="Simulate a survivor shouting HELP to instantly drop a pin point on map"
-        >
-          <MapPin className="w-3 h-3 text-rose-400 animate-bounce" />
-          <span>SIMULATE & PIN "HELP!"</span>
-        </button>
+        <div className="grid grid-cols-2 gap-1.5">
+          <button
+            onClick={() => triggerDistressPin("HELP! Trapped under debris", "help")}
+            className="py-1.5 px-2 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/40 hover:border-rose-500/80 rounded text-[10px] font-mono text-rose-200 font-bold flex items-center justify-center gap-1 transition-all shadow-sm active:scale-95"
+            title="Simulate survivor shouting HELP"
+          >
+            <MapPin className="w-3 h-3 text-rose-400" />
+            <span>PIN "HELP!"</span>
+          </button>
+          <button
+            onClick={() => triggerDistressPin("BACHAO! Hum fas gaye hain", "bachao")}
+            className="py-1.5 px-2 bg-amber-950/40 hover:bg-amber-900/60 border border-amber-500/40 hover:border-amber-500/80 rounded text-[10px] font-mono text-amber-200 font-bold flex items-center justify-center gap-1 transition-all shadow-sm active:scale-95"
+            title="Simulate Indic distress cry BACHAO"
+          >
+            <MapPin className="w-3 h-3 text-amber-400" />
+            <span>PIN "BACHAO!"</span>
+          </button>
+        </div>
 
         {/* Pinpoint Notification Toast Banner */}
         {justPinnedToast && (

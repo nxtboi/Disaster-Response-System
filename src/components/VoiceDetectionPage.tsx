@@ -25,27 +25,42 @@ import {
   Play,
   RotateCcw,
   Zap,
-  Info
+  Info,
+  Languages
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { DroneCoordinates } from "../types";
 
-// Distress keywords dictionary with urgency ratings
+// Gnani.ai Multi-Lingual & Indic SAR Distress Lexicon
 const DISTRESS_KEYWORDS = [
-  { phrase: "help", urgency: "CRITICAL", score: 0.98 },
-  { phrase: "help me", urgency: "CRITICAL", score: 0.99 },
-  { phrase: "save me", urgency: "CRITICAL", score: 0.98 },
-  { phrase: "please help", urgency: "CRITICAL", score: 0.99 },
-  { phrase: "trapped", urgency: "HIGH", score: 0.95 },
-  { phrase: "under rubble", urgency: "CRITICAL", score: 0.99 },
-  { phrase: "emergency", urgency: "HIGH", score: 0.94 },
-  { phrase: "survivor", urgency: "HIGH", score: 0.92 },
-  { phrase: "mayday", urgency: "CRITICAL", score: 0.99 },
-  { phrase: "sos", urgency: "CRITICAL", score: 0.99 },
-  { phrase: "bachao", urgency: "CRITICAL", score: 0.97 },
-  { phrase: "over here", urgency: "MEDIUM", score: 0.88 },
-  { phrase: "i am hurt", urgency: "HIGH", score: 0.95 },
-  { phrase: "can you hear me", urgency: "MEDIUM", score: 0.85 },
+  // English
+  { phrase: "help", urgency: "CRITICAL", score: 0.99, lang: "English", desc: "Life Safety Cry" },
+  { phrase: "help me", urgency: "CRITICAL", score: 0.99, lang: "English", desc: "Direct Distress" },
+  { phrase: "save me", urgency: "CRITICAL", score: 0.98, lang: "English", desc: "Emergency Rescue" },
+  { phrase: "please help", urgency: "CRITICAL", score: 0.99, lang: "English", desc: "Urgent Plea" },
+  { phrase: "trapped", urgency: "HIGH", score: 0.96, lang: "English", desc: "Entrapment" },
+  { phrase: "under rubble", urgency: "CRITICAL", score: 0.99, lang: "English", desc: "Structural Collapse" },
+  { phrase: "emergency", urgency: "HIGH", score: 0.94, lang: "English", desc: "Hazard Alert" },
+  { phrase: "survivor", urgency: "HIGH", score: 0.92, lang: "English", desc: "Presence Detection" },
+  { phrase: "mayday", urgency: "CRITICAL", score: 0.99, lang: "English", desc: "Aviation/Maritime Mayday" },
+  { phrase: "sos", urgency: "CRITICAL", score: 0.99, lang: "English", desc: "Morse/Acoustic SOS" },
+  { phrase: "over here", urgency: "MEDIUM", score: 0.88, lang: "English", desc: "Spatial Pinpoint" },
+  { phrase: "i am hurt", urgency: "HIGH", score: 0.95, lang: "English", desc: "Casualty Distress" },
+  { phrase: "can you hear me", urgency: "MEDIUM", score: 0.86, lang: "English", desc: "Acoustic Check" },
+  // Indic Languages (Gnani.ai Specialization)
+  { phrase: "bachao", urgency: "CRITICAL", score: 0.99, lang: "Hindi", desc: "बचाओ (Rescue/Save Me)" },
+  { phrase: "madad", urgency: "HIGH", score: 0.95, lang: "Hindi", desc: "मदद (Need Help)" },
+  { phrase: "madad karo", urgency: "CRITICAL", score: 0.98, lang: "Hindi", desc: "मदद करो (Help Us Now)" },
+  { phrase: "fas gaye", urgency: "HIGH", score: 0.95, lang: "Hindi", desc: "फंस गए (Trapped)" },
+  { phrase: "koi hai", urgency: "MEDIUM", score: 0.89, lang: "Hindi", desc: "कोई है (Anyone There)" },
+  { phrase: "kaapaathunga", urgency: "CRITICAL", score: 0.99, lang: "Tamil", desc: "காப்பாத்துங்க (Save Me)" },
+  { phrase: "udhavi", urgency: "HIGH", score: 0.95, lang: "Tamil", desc: "உதவி (Help)" },
+  { phrase: "kaapadandi", urgency: "CRITICAL", score: 0.99, lang: "Telugu", desc: "కాపాడండి (Save Us)" },
+  { phrase: "sahayam", urgency: "HIGH", score: 0.94, lang: "Telugu", desc: "సహాయం (Help)" },
+  { phrase: "kaapadi", urgency: "CRITICAL", score: 0.99, lang: "Kannada", desc: "ಕಾಪಾಡಿ (Rescue Me)" },
+  { phrase: "sahaya madi", urgency: "HIGH", score: 0.95, lang: "Kannada", desc: "ಸಹಾಯ ಮಾಡಿ (Help Us)" },
+  { phrase: "vaachva", urgency: "CRITICAL", score: 0.99, lang: "Marathi", desc: "वाचवा (Save Me)" },
+  { phrase: "shahajjo korun", urgency: "CRITICAL", score: 0.98, lang: "Bengali", desc: "সাহায্য করুন (Help Me)" },
 ];
 
 interface DetectionEvent {
@@ -59,12 +74,24 @@ interface DetectionEvent {
   waypointId?: string;
   droneId: string;
   droneName: string;
+  language?: string;
   audioTriangulation: {
     snrDb: number;
     estimatedDistanceM: number;
     vocalPitchHz: number;
   };
 }
+
+const GNANI_LANGUAGES = [
+  { code: "auto", name: "Auto-Detect (Indic & English)", flag: "🇮🇳" },
+  { code: "en-IN", name: "Indian English (en-IN)", flag: "🌐" },
+  { code: "hi-IN", name: "Hindi • हिंदी (hi-IN)", flag: "🇮🇳" },
+  { code: "ta-IN", name: "Tamil • தமிழ் (ta-IN)", flag: "🇮🇳" },
+  { code: "te-IN", name: "Telugu • తెలుగు (te-IN)", flag: "🇮🇳" },
+  { code: "kn-IN", name: "Kannada • ಕನ್ನಡ (kn-IN)", flag: "🇮🇳" },
+  { code: "bn-IN", name: "Bengali • বাংলা (bn-IN)", flag: "🇮🇳" },
+  { code: "mr-IN", name: "Marathi • मराठी (mr-IN)", flag: "🇮🇳" },
+];
 
 export function VoiceDetectionPage() {
   const {
@@ -86,6 +113,20 @@ export function VoiceDetectionPage() {
   const [isListening, setIsListening] = useState(false);
   const [micPermission, setMicPermission] = useState<"prompt" | "granted" | "denied">("prompt");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Gnani.ai Engine Configuration & State
+  const [selectedLanguage, setSelectedLanguage] = useState("auto");
+  const [gnaniStatus, setGnaniStatus] = useState<{
+    provider: string;
+    engine: string;
+    mode: string;
+    hasApiKey: boolean;
+  }>({
+    provider: "Gnani.ai",
+    engine: "Gnani.ai Vachana ASR & Acoustic Intelligence v3.2",
+    mode: "Gnani.ai Edge SAR Acoustic Model",
+    hasApiKey: false,
+  });
 
   // Audio processing parameters
   const [filterNoiseReduction, setFilterNoiseReduction] = useState(true);
@@ -216,7 +257,8 @@ export function VoiceDetectionPage() {
     transcript: string,
     matchedKeyword: string,
     confidence: number,
-    urgency: "CRITICAL" | "HIGH" | "MEDIUM" = "CRITICAL"
+    urgency: "CRITICAL" | "HIGH" | "MEDIUM" = "CRITICAL",
+    detectedLanguage: string = "Indic / Multilingual"
   ) => {
     if (isCooldownRef.current) return;
     isCooldownRef.current = true;
@@ -239,7 +281,7 @@ export function VoiceDetectionPage() {
     // 1. Auto-create Tactical Waypoint in Maps at current GPS location
     if (autoWaypointEnabled) {
       const newWp = addWaypoint(survivorCoords, {
-        name: `🚨 SURVIVOR: "${matchedKeyword.toUpperCase()}"`,
+        name: `🚨 SURVIVOR: "${matchedKeyword.toUpperCase()}" (${detectedLanguage})`,
         action: "Hover & Scan",
         altitude: 70,
         speed: 25,
@@ -270,7 +312,7 @@ export function VoiceDetectionPage() {
     }
 
     // 2. Add System Alert
-    const alertMsg = `[AI VAD] Survivor vocal distress "${matchedKeyword.toUpperCase()}" localized at current device GPS [${survivorCoords.lat}, ${survivorCoords.lng}]. Waypoint pinned on Dashboard map.`;
+    const alertMsg = `[GNANI.AI VOICE] Survivor vocal distress "${matchedKeyword.toUpperCase()}" [${detectedLanguage}] localized at GPS [${survivorCoords.lat}, ${survivorCoords.lng}]. Waypoint pinned.`;
     if (drone) {
       addAlert(drone.id, alertMsg);
     }
@@ -298,6 +340,7 @@ export function VoiceDetectionPage() {
       waypointId: createdWpId,
       droneId: drone?.id || "DRN-01",
       droneName: drone?.name || "DRS Drone Alpha",
+      language: detectedLanguage,
       audioTriangulation: {
         snrDb: Number((18 + Math.random() * 12).toFixed(1)),
         estimatedDistanceM: Math.floor(15 + Math.random() * 45),
@@ -322,13 +365,15 @@ export function VoiceDetectionPage() {
     requestUserLocation,
   ]);
 
-  // Analyze text transcript for distress keywords
-  const processTranscript = useCallback((transcriptText: string) => {
+  // Analyze text transcript for distress keywords via Gnani.ai Intelligence
+  const processTranscript = useCallback(async (transcriptText: string) => {
     setLastRecognizedTranscript(transcriptText);
     const lower = transcriptText.toLowerCase().trim();
     if (!lower) return;
 
-    // Check matched keywords
+    setIsProcessingAi(true);
+
+    // 1. Check local Gnani Indic lexicon
     let bestMatch: (typeof DISTRESS_KEYWORDS)[0] | null = null;
     for (const item of DISTRESS_KEYWORDS) {
       if (lower.includes(item.phrase)) {
@@ -338,19 +383,50 @@ export function VoiceDetectionPage() {
       }
     }
 
-    if (bestMatch) {
-      setIsProcessingAi(true);
-      setTimeout(() => {
-        setIsProcessingAi(false);
-        triggerDistressDetection(
-          transcriptText,
-          bestMatch!.phrase,
-          bestMatch!.score,
-          bestMatch!.urgency as any
-        );
-      }, 300);
+    // 2. Query Gnani.ai server endpoint for acoustic intelligence & Indic dialect analysis
+    try {
+      const response = await fetch("/api/gnani/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: transcriptText,
+          language: selectedLanguage,
+          pitch: livePitch || 175,
+          snr: liveSnr || 18,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.isDistress && data.analysis) {
+          setIsProcessingAi(false);
+          triggerDistressDetection(
+            transcriptText,
+            data.analysis.matchedKeyword || (bestMatch ? bestMatch.phrase : "help"),
+            data.analysis.confidence || 0.98,
+            data.analysis.urgency || "CRITICAL",
+            data.analysis.language ? `Gnani (${data.analysis.language.toUpperCase()})` : (bestMatch?.lang || "Indic")
+          );
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn("Gnani analyze API call fallback:", err);
     }
-  }, [triggerDistressDetection]);
+
+    if (bestMatch) {
+      setIsProcessingAi(false);
+      triggerDistressDetection(
+        transcriptText,
+        bestMatch.phrase,
+        bestMatch.score,
+        bestMatch.urgency as any,
+        bestMatch.lang
+      );
+    } else {
+      setIsProcessingAi(false);
+    }
+  }, [triggerDistressDetection, selectedLanguage, livePitch, liveSnr]);
 
   // Initialize Web Audio API & SpeechRecognition
   const startListening = async () => {
@@ -405,7 +481,7 @@ export function VoiceDetectionPage() {
         const recognition = new SpeechRec();
         recognition.continuous = true;
         recognition.interimResults = true;
-        recognition.lang = "en-US";
+        recognition.lang = selectedLanguage === "auto" ? "en-IN" : selectedLanguage;
 
         recognition.onresult = (event: any) => {
           let currentTranscript = "";
@@ -598,6 +674,20 @@ export function VoiceDetectionPage() {
     }
   }, []);
 
+  // Check Gnani AI backend status on mount
+  useEffect(() => {
+    fetch("/api/gnani/status")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.engine) {
+          setGnaniStatus(data);
+        }
+      })
+      .catch((err) => {
+        console.warn("Gnani status check:", err);
+      });
+  }, []);
+
   // Clean up audio nodes on unmount
   useEffect(() => {
     return () => {
@@ -613,18 +703,53 @@ export function VoiceDetectionPage() {
           <div className="flex items-center gap-2.5 text-cyan-400">
             <AudioWaveform className="w-6 h-6 animate-pulse" />
             <h1 className="text-xl md:text-2xl font-bold tracking-widest text-zinc-100 font-mono">
-              AI VOICE DETECTION & VAD SYSTEM
+              GNANI.AI VOICE DETECTION & VAD
             </h1>
           </div>
           <p className="text-xs text-zinc-400 font-mono mt-1">
-            Real-time acoustic noise filtering, AI distress keyword spotting & automated tactical map waypoint logging.
+            Powered by Gnani.ai Indic Speech Engine & Acoustic Intelligence. Real-time noise filtering, multilingual distress cry spotting & tactical GPS waypoint pinning.
           </p>
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 font-mono text-[10px] font-bold tracking-wide">
+              <Sparkles className="w-3 h-3 text-cyan-400" />
+              <span>{gnaniStatus.engine}</span>
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400 font-mono text-[10px]">
+              <Radio className="w-2.5 h-2.5 text-emerald-400" />
+              <span>{gnaniStatus.mode}</span>
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400 font-mono text-[10px]">
+              <span>8 Indic Languages + English</span>
+            </span>
+          </div>
         </div>
 
-        {/* GPS Status & Master Mic Toggle Control */}
-        <div className="flex flex-wrap items-center gap-3">
+        {/* GPS Status, Language Selector & Master Mic Toggle Control */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Gnani Indic Language Selector */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs font-mono">
+            <Languages className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+            <select
+              value={selectedLanguage}
+              onChange={(e) => {
+                const newLang = e.target.value;
+                setSelectedLanguage(newLang);
+                if (recognitionRef.current) {
+                  recognitionRef.current.lang = newLang === "auto" ? "en-IN" : newLang;
+                }
+              }}
+              className="bg-transparent text-zinc-200 text-[11px] font-mono outline-none cursor-pointer pr-1"
+            >
+              {GNANI_LANGUAGES.map((l) => (
+                <option key={l.code} value={l.code} className="bg-zinc-900 text-zinc-200">
+                  {l.flag} {l.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Live Device GPS Indicator */}
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs font-mono">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs font-mono">
             <MapPin className={cn("w-3.5 h-3.5", userLocation ? "text-emerald-400" : "text-amber-400 animate-pulse")} />
             <span className="text-zinc-400 text-[11px]">GPS:</span>
             {userLocation ? (
@@ -908,7 +1033,32 @@ export function VoiceDetectionPage() {
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+              <button
+                id="simulate-bachao-btn"
+                onClick={() => {
+                  processTranscript("BACHAO! Hum yahan fas gaye hain, kripya madad bhejiye!");
+                }}
+                className="p-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800/90 border border-zinc-800 hover:border-rose-500/50 text-left flex items-start gap-2.5 transition-all group"
+              >
+                <div className="p-1.5 rounded bg-rose-500/10 text-rose-400 group-hover:bg-rose-500/20 shrink-0">
+                  <Play className="w-3.5 h-3.5" />
+                </div>
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-mono font-bold text-zinc-200 group-hover:text-rose-300">
+                      "BACHAO! Hum fas gaye hain!"
+                    </span>
+                    <span className="px-1.5 py-0.2 rounded bg-orange-500/20 text-orange-300 text-[9px] font-mono">
+                      HINDI
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono text-zinc-500 mt-0.5">
+                    Gnani.ai Indic Spotting • बचाओ Distress
+                  </span>
+                </div>
+              </button>
+
               <button
                 id="simulate-help-btn"
                 onClick={() => {
@@ -920,9 +1070,14 @@ export function VoiceDetectionPage() {
                   <Play className="w-3.5 h-3.5" />
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-xs font-mono font-bold text-zinc-200 group-hover:text-rose-300">
-                    "HELP! I am trapped under wall!"
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-mono font-bold text-zinc-200 group-hover:text-rose-300">
+                      "HELP! Trapped under wall!"
+                    </span>
+                    <span className="px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 text-[9px] font-mono">
+                      ENG
+                    </span>
+                  </div>
                   <span className="text-[10px] font-mono text-zinc-500 mt-0.5">
                     Critical Distress • Auto-Waypoint Trigger
                   </span>
@@ -930,9 +1085,9 @@ export function VoiceDetectionPage() {
               </button>
 
               <button
-                id="simulate-save-me-btn"
+                id="simulate-kaapaathunga-btn"
                 onClick={() => {
-                  processTranscript("Help me please! Over here, water is rising!");
+                  processTranscript("Kaapaathunga! Udhavi thevai! Please rescue us!");
                 }}
                 className="p-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800/90 border border-zinc-800 hover:border-amber-500/50 text-left flex items-start gap-2.5 transition-all group"
               >
@@ -940,11 +1095,41 @@ export function VoiceDetectionPage() {
                   <Play className="w-3.5 h-3.5" />
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-xs font-mono font-bold text-zinc-200 group-hover:text-amber-300">
-                    "Help me please! Over here!"
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-mono font-bold text-zinc-200 group-hover:text-amber-300">
+                      "KAAPAATHUNGA! Rescue!"
+                    </span>
+                    <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[9px] font-mono">
+                      TAMIL
+                    </span>
+                  </div>
                   <span className="text-[10px] font-mono text-zinc-500 mt-0.5">
-                    High Urgency • Acoustic Triangulation
+                    காப்பாத்துங்க • Indic Voice Pinpoint
+                  </span>
+                </div>
+              </button>
+
+              <button
+                id="simulate-kaapadandi-btn"
+                onClick={() => {
+                  processTranscript("Kaapadandi! Flash flood water is rising inside cellar!");
+                }}
+                className="p-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800/90 border border-zinc-800 hover:border-cyan-500/50 text-left flex items-start gap-2.5 transition-all group"
+              >
+                <div className="p-1.5 rounded bg-cyan-500/10 text-cyan-400 group-hover:bg-cyan-500/20 shrink-0">
+                  <Play className="w-3.5 h-3.5" />
+                </div>
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-mono font-bold text-zinc-200 group-hover:text-cyan-300">
+                      "KAAPADANDI! Water rising!"
+                    </span>
+                    <span className="px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 text-[9px] font-mono">
+                      TELUGU
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono text-zinc-500 mt-0.5">
+                    కాపాడండి • Rapid Acoustic VAD
                   </span>
                 </div>
               </button>
@@ -954,17 +1139,22 @@ export function VoiceDetectionPage() {
                 onClick={() => {
                   processTranscript("Mayday! Survivor located in basement floor, need emergency rescue!");
                 }}
-                className="p-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800/90 border border-zinc-800 hover:border-cyan-500/50 text-left flex items-start gap-2.5 transition-all group"
+                className="p-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800/90 border border-zinc-800 hover:border-rose-500/50 text-left flex items-start gap-2.5 transition-all group"
               >
-                <div className="p-1.5 rounded bg-cyan-500/10 text-cyan-400 group-hover:bg-cyan-500/20 shrink-0">
+                <div className="p-1.5 rounded bg-rose-500/10 text-rose-400 group-hover:bg-rose-500/20 shrink-0">
                   <Play className="w-3.5 h-3.5" />
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-xs font-mono font-bold text-zinc-200 group-hover:text-cyan-300">
-                    "Mayday! Survivor located in basement!"
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-mono font-bold text-zinc-200 group-hover:text-rose-300">
+                      "MAYDAY! Survivor in basement!"
+                    </span>
+                    <span className="px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 text-[9px] font-mono">
+                      SAR
+                    </span>
+                  </div>
                   <span className="text-[10px] font-mono text-zinc-500 mt-0.5">
-                    Search & Rescue Protocol • Hover & Scan
+                    Aviation / Search & Rescue Protocol
                   </span>
                 </div>
               </button>
@@ -986,10 +1176,10 @@ export function VoiceDetectionPage() {
                 </div>
                 <div className="flex flex-col">
                   <span className="text-xs font-mono font-bold text-zinc-300">
-                    Test Propeller / Wind Noise Rejection
+                    Propeller & Wind Rejection
                   </span>
                   <span className="text-[10px] font-mono text-zinc-500 mt-0.5">
-                    Simulates non-vocal audio rejection
+                    DSP Bandpass & Noise Gate Rejection
                   </span>
                 </div>
               </button>
@@ -1117,9 +1307,43 @@ export function VoiceDetectionPage() {
 
             {/* Broadcast Loudspeaker Message Editor */}
             <div className="pt-2 border-t border-zinc-800/80 flex flex-col gap-1.5">
-              <span className="text-[11px] font-mono text-zinc-300 font-bold">
-                Drone Loudspeaker Broadcast Message:
-              </span>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-mono text-zinc-300 font-bold">
+                  Drone Loudspeaker Broadcast Message:
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() =>
+                      setBroadcastMessage(
+                        "DRS Drone located your voice signal. Stay calm, help is on the way. Hold your position."
+                      )
+                    }
+                    className="px-1.5 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-[9px] font-mono text-cyan-300 transition-colors"
+                  >
+                    ENG
+                  </button>
+                  <button
+                    onClick={() =>
+                      setBroadcastMessage(
+                        "डीआरएस ड्रोन ने आपकी आवाज़ पहचान ली है। शांत रहें, सहायता रास्ते में है। अपनी जगह पर रहें।"
+                      )
+                    }
+                    className="px-1.5 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-[9px] font-mono text-orange-300 transition-colors"
+                  >
+                    हिंदी
+                  </button>
+                  <button
+                    onClick={() =>
+                      setBroadcastMessage(
+                        "டிஆர்எஸ் ட்ரோன் உங்கள் குரலைக் கண்டறிந்துள்ளது. அமைதியாக இருங்கள், உதவி வருகிறது."
+                      )
+                    }
+                    className="px-1.5 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-[9px] font-mono text-amber-300 transition-colors"
+                  >
+                    தமிழ்
+                  </button>
+                </div>
+              </div>
               <textarea
                 value={broadcastMessage}
                 onChange={(e) => setBroadcastMessage(e.target.value)}
@@ -1195,6 +1419,7 @@ export function VoiceDetectionPage() {
               <thead>
                 <tr className="border-b border-zinc-800 text-[10px] text-zinc-500 uppercase tracking-wider">
                   <th className="py-2 px-3">Time</th>
+                  <th className="py-2 px-3">Engine / Lang</th>
                   <th className="py-2 px-3">Keyword</th>
                   <th className="py-2 px-3">Transcript</th>
                   <th className="py-2 px-3">Confidence</th>
@@ -1207,6 +1432,11 @@ export function VoiceDetectionPage() {
                 {detectionEvents.map((evt) => (
                   <tr key={evt.id} className="hover:bg-zinc-900/80 transition-colors">
                     <td className="py-2.5 px-3 text-zinc-400">{evt.timestamp}</td>
+                    <td className="py-2.5 px-3">
+                      <span className="px-2 py-0.5 rounded bg-cyan-950/70 text-cyan-300 font-bold border border-cyan-500/30 text-[10px]">
+                        {evt.language || "Gnani Indic"}
+                      </span>
+                    </td>
                     <td className="py-2.5 px-3">
                       <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold border border-rose-500/40 uppercase text-[10px]">
                         {evt.matchedKeyword}

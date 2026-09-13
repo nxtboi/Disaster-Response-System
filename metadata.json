@@ -1,6 +1,6 @@
 {
   "name": "DRS",
-  "description": "Drone Response & Surveillance system with free tactical map radar and Google Maps telemetry tracking.",
+  "description": "Drone Response & Surveillance system with free tactical map radar, 256000 baud hardware link, and Gnani.ai Indic Voice AI distress detection.",
   "requestFramePermissions": [
     "geolocation",
     "camera",

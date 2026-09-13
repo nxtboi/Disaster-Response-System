@@ -1,13 +1,29 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { useDRS } from '../store';
-import { Crosshair, LocateFixed, Layers, MousePointerClick, Navigation, MapPin, Loader2, PlaneTakeoff, ShieldAlert, Route, Plus, Trash2, X } from 'lucide-react';
+import { Crosshair, LocateFixed, Layers, MousePointerClick, Navigation, MapPin, Loader2, PlaneTakeoff, ShieldAlert, Route, Plus, Trash2, X, Check, Search } from 'lucide-react';
 
 interface FreeTacticalMapProps {
   onRecenter?: () => void;
 }
 
-type TileStyle = 'dark' | 'satellite' | 'street' | 'topo' | 'light' | 'esri_street' | 'esri_topo' | 'voyager' | 'cyclosm';
+type TileStyle =
+  | 'dark'
+  | 'dark_clean'
+  | 'voyager'
+  | 'satellite'
+  | 'usgs_imagery'
+  | 'hot'
+  | 'cyclosm'
+  | 'topo'
+  | 'usgs_topo'
+  | 'esri_topo'
+  | 'natgeo'
+  | 'ocean'
+  | 'street'
+  | 'esri_street'
+  | 'light'
+  | 'light_clean';
 
 const TILE_SERVERS: Record<TileStyle, { url: string; attribution: string; maxZoom: number; label: string; subtext: string; category: string; subdomains?: string }> = {
   dark: {
@@ -15,17 +31,102 @@ const TILE_SERVERS: Record<TileStyle, { url: string; attribution: string; maxZoo
     attribution: '&copy; OpenStreetMap &copy; CARTO',
     maxZoom: 19,
     label: 'Dark Matter',
-    subtext: 'Tactical Dark',
+    subtext: 'Tactical Dark Radar',
+    category: 'Tactical',
+    subdomains: 'abcd',
+  },
+  dark_clean: {
+    url: 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; OpenStreetMap &copy; CARTO',
+    maxZoom: 19,
+    label: 'Dark Tactical (Clean)',
+    subtext: 'Pure Radar (No Labels)',
+    category: 'Tactical',
+    subdomains: 'abcd',
+  },
+  voyager: {
+    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; OpenStreetMap &copy; CARTO',
+    maxZoom: 19,
+    label: 'CARTO Voyager',
+    subtext: 'Vibrant Hybrid Tactical',
     category: 'Tactical',
     subdomains: 'abcd',
   },
   satellite: {
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{x}/{y}',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     attribution: 'Tiles &copy; Esri, USDA, USGS, AeroGRID, IGN',
     maxZoom: 18,
     label: 'Satellite HD',
     subtext: 'Esri World Imagery',
     category: 'Aerial',
+  },
+  usgs_imagery: {
+    url: 'https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles courtesy of the U.S. Geological Survey',
+    maxZoom: 16,
+    label: 'USGS Satellite',
+    subtext: 'High-Res Orthoimagery',
+    category: 'Aerial',
+  },
+  hot: {
+    url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+    attribution: '&copy; OpenStreetMap &copy; Humanitarian OpenStreetMap',
+    maxZoom: 19,
+    label: 'Humanitarian (HOT)',
+    subtext: 'Disaster & SAR Operations',
+    category: 'Emergency',
+    subdomains: 'abc',
+  },
+  cyclosm: {
+    url: 'https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
+    attribution: '&copy; OpenStreetMap contributors &copy; CyclOSM',
+    maxZoom: 19,
+    label: 'CyclOSM Trails',
+    subtext: 'Outdoor & SAR Paths',
+    category: 'Emergency',
+    subdomains: 'abc',
+  },
+  topo: {
+    url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; OpenStreetMap &copy; OpenTopoMap',
+    maxZoom: 17,
+    label: 'Topographic (OpenTopo)',
+    subtext: 'Terrain Elevation Contours',
+    category: 'Terrain',
+    subdomains: 'abc',
+  },
+  usgs_topo: {
+    url: 'https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles courtesy of the U.S. Geological Survey',
+    maxZoom: 16,
+    label: 'USGS Topographic',
+    subtext: 'Official USGS Contours',
+    category: 'Terrain',
+  },
+  esri_topo: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri, USGS, NOAA',
+    maxZoom: 19,
+    label: 'Esri Topo Relief',
+    subtext: 'Shaded Elevation Relief',
+    category: 'Terrain',
+  },
+  natgeo: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri, National Geographic, USGS',
+    maxZoom: 16,
+    label: 'National Geographic',
+    subtext: 'Classic NatGeo World Atlas',
+    category: 'Atlas',
+  },
+  ocean: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri, GEBCO, NOAA, National Geographic',
+    maxZoom: 13,
+    label: 'Ocean & Maritime',
+    subtext: 'Marine SAR & Bathymetry',
+    category: 'Maritime',
   },
   street: {
     url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -36,14 +137,13 @@ const TILE_SERVERS: Record<TileStyle, { url: string; attribution: string; maxZoo
     category: 'Roads',
     subdomains: 'abc',
   },
-  topo: {
-    url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; OpenStreetMap &copy; OpenTopoMap',
-    maxZoom: 17,
-    label: 'Topographic',
-    subtext: 'Terrain Elevation',
-    category: 'Terrain',
-    subdomains: 'abc',
+  esri_street: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri, DeLorme, NAVTEQ',
+    maxZoom: 19,
+    label: 'Esri World Street',
+    subtext: 'Highways & Landmarks',
+    category: 'Roads',
   },
   light: {
     url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
@@ -54,39 +154,14 @@ const TILE_SERVERS: Record<TileStyle, { url: string; attribution: string; maxZoo
     category: 'Roads',
     subdomains: 'abcd',
   },
-  esri_street: {
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{x}/{y}',
-    attribution: 'Tiles &copy; Esri, DeLorme, NAVTEQ',
-    maxZoom: 19,
-    label: 'Esri World Street',
-    subtext: 'Highways & Landmarks',
-    category: 'Roads',
-  },
-  esri_topo: {
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{x}/{y}',
-    attribution: 'Tiles &copy; Esri, USGS, NOAA',
-    maxZoom: 19,
-    label: 'Esri Topo Relief',
-    subtext: 'Landforms & Relief',
-    category: 'Terrain',
-  },
-  voyager: {
-    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+  light_clean: {
+    url: 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png',
     attribution: '&copy; OpenStreetMap &copy; CARTO',
     maxZoom: 19,
-    label: 'CARTO Voyager',
-    subtext: 'Vibrant Hybrid View',
-    category: 'Tactical',
+    label: 'Positron (Clean)',
+    subtext: 'Minimal Light Canvas',
+    category: 'Roads',
     subdomains: 'abcd',
-  },
-  cyclosm: {
-    url: 'https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
-    attribution: '&copy; OpenStreetMap contributors &copy; CyclOSM',
-    maxZoom: 19,
-    label: 'CyclOSM Trails',
-    subtext: 'Outdoor & SAR Paths',
-    category: 'Outdoor',
-    subdomains: 'abc',
   },
 };
 
@@ -126,6 +201,8 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
   const [tileStyle, setTileStyle] = useState<TileStyle>('dark');
   const [isTracking, setIsTracking] = useState(true);
   const [showLayerMenu, setShowLayerMenu] = useState(false);
+  const [layerCategory, setLayerCategory] = useState<string>('All');
+  const [layerSearch, setLayerSearch] = useState<string>('');
   const [locationSuccessToast, setLocationSuccessToast] = useState(false);
   const [waypointPlacedToast, setWaypointPlacedToast] = useState<string | null>(null);
 
@@ -763,37 +840,108 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
           </button>
 
           {showLayerMenu && (
-            <div className="absolute right-0 mt-1.5 w-60 max-h-96 overflow-y-auto bg-zinc-950/95 border border-zinc-800 rounded-xl p-2 shadow-2xl backdrop-blur-xl flex flex-col gap-1 z-50">
-              <div className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-bold border-b border-zinc-800/80 mb-1 flex items-center justify-between">
-                <span>Free Tile Providers</span>
-                <span className="text-emerald-400 font-semibold">100% Free</span>
+            <div className="absolute right-0 mt-1.5 w-72 sm:w-80 max-h-[480px] bg-zinc-950/95 border border-zinc-800 rounded-xl p-2.5 shadow-2xl backdrop-blur-xl flex flex-col gap-2 z-50">
+              <div className="flex items-center justify-between pb-1.5 border-b border-zinc-800/80">
+                <div className="flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-cyan-400" />
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-300 font-bold">Free Map Engines</span>
+                </div>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-500/30 font-bold">
+                  {Object.keys(TILE_SERVERS).length} Free Maps
+                </span>
               </div>
-              {(Object.keys(TILE_SERVERS) as TileStyle[]).map((key) => {
-                const config = TILE_SERVERS[key];
-                const isActive = tileStyle === key;
-                return (
+
+              {/* Quick Search */}
+              <div className="relative">
+                <Search className="w-3 h-3 text-zinc-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Filter maps (e.g. satellite, topo, hot)..."
+                  value={layerSearch}
+                  onChange={(e) => setLayerSearch(e.target.value)}
+                  className="w-full bg-zinc-900/90 border border-zinc-800/90 rounded-lg pl-7 pr-6 py-1 text-[11px] font-mono text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-cyan-500/60 transition-colors"
+                />
+                {layerSearch && (
                   <button
-                    key={key}
-                    onClick={() => {
-                      setTileStyle(key);
-                      setShowLayerMenu(false);
-                    }}
-                    className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-mono transition-all ${
-                      isActive
-                        ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40 shadow-sm'
-                        : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
-                    }`}
+                    onClick={() => setLayerSearch('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
                   >
-                    <div className="flex flex-col text-left">
-                      <span className="font-medium text-[11px]">{config.label}</span>
-                      <span className="text-[9px] text-zinc-500">{config.subtext}</span>
-                    </div>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-800 shrink-0">
-                      {config.category}
-                    </span>
+                    <X className="w-3 h-3" />
                   </button>
-                );
-              })}
+                )}
+              </div>
+
+              {/* Category Pills */}
+              <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none">
+                {['All', 'Tactical', 'Aerial', 'Emergency', 'Terrain', 'Roads', 'Atlas', 'Maritime'].map((cat) => {
+                  const isCatActive = layerCategory === cat;
+                  return (
+                    <button
+                      key={cat}
+                      onClick={() => setLayerCategory(cat)}
+                      className={`px-2 py-0.5 rounded text-[10px] font-mono whitespace-nowrap transition-colors ${
+                        isCatActive
+                          ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 font-semibold'
+                          : 'bg-zinc-900/80 text-zinc-400 border border-zinc-800 hover:text-zinc-200'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Map Tile Options List */}
+              <div className="overflow-y-auto max-h-64 flex flex-col gap-1 pr-0.5">
+                {(Object.keys(TILE_SERVERS) as TileStyle[])
+                  .filter((key) => {
+                    const config = TILE_SERVERS[key];
+                    const matchesCategory = layerCategory === 'All' || config.category.toLowerCase() === layerCategory.toLowerCase();
+                    const matchesSearch = !layerSearch.trim() || 
+                      config.label.toLowerCase().includes(layerSearch.toLowerCase()) || 
+                      config.subtext.toLowerCase().includes(layerSearch.toLowerCase()) ||
+                      config.category.toLowerCase().includes(layerSearch.toLowerCase());
+                    return matchesCategory && matchesSearch;
+                  })
+                  .map((key) => {
+                    const config = TILE_SERVERS[key];
+                    const isActive = tileStyle === key;
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => {
+                          setTileStyle(key);
+                          setShowLayerMenu(false);
+                        }}
+                        className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-mono transition-all text-left group ${
+                          isActive
+                            ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40 shadow-sm'
+                            : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200 border border-transparent'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          {isActive ? (
+                            <Check className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                          ) : (
+                            <div className="w-1.5 h-1.5 rounded-full bg-zinc-700 group-hover:bg-cyan-500/50 shrink-0 ml-1" />
+                          )}
+                          <div className="flex flex-col min-w-0">
+                            <span className="font-medium text-[11px] text-zinc-200 group-hover:text-white truncate">{config.label}</span>
+                            <span className="text-[9px] text-zinc-500 truncate">{config.subtext}</span>
+                          </div>
+                        </div>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-800 shrink-0 ml-1">
+                          {config.category}
+                        </span>
+                      </button>
+                    );
+                  })}
+              </div>
+
+              <div className="pt-1 border-t border-zinc-800/80 flex items-center justify-between text-[9px] font-mono text-zinc-500">
+                <span>No API keys required</span>
+                <span className="text-cyan-400/80">Leaflet OSS Engine</span>
+              </div>
             </div>
           )}
         </div>

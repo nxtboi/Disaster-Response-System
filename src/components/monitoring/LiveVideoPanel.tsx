@@ -56,6 +56,10 @@ export function LiveVideoPanel({
     activeVisitorCount,
     realDeviceCount,
     myDeviceId,
+    broadcastAsDrone1,
+    toggleBroadcastAsDrone1,
+    drone1Broadcast,
+    drone1RemoteFrame,
   } = useCameraSources(drones, false, currentUser?.username || "Operator");
 
   // Determine default camera ID if not provided
@@ -569,6 +573,22 @@ export function LiveVideoPanel({
 
         {/* Action Controls */}
         <div className="flex items-center gap-1.5 shrink-0">
+          {/* Relay As Drone 1 Toggle */}
+          <button
+            type="button"
+            onClick={toggleBroadcastAsDrone1}
+            className={`px-2 py-0.5 rounded text-[10px] font-mono flex items-center gap-1 border transition-all ${
+              broadcastAsDrone1
+                ? "bg-emerald-500/20 text-emerald-300 border-emerald-400 font-bold shadow-[0_0_8px_rgba(16,185,129,0.25)]"
+                : "bg-zinc-850 hover:bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-zinc-300"
+            }`}
+            title="When broadcasting, display this device as Drone 1 (DRN-01) on other devices"
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${broadcastAsDrone1 ? "bg-emerald-400 animate-ping" : "bg-zinc-600"}`} />
+            <span className="hidden md:inline">RELAY AS DRN-01:</span>
+            <span>{broadcastAsDrone1 ? "ON" : "OFF"}</span>
+          </button>
+
           {/* Quick Broadcast Camera Button */}
           <button
             onClick={toggleBroadcasting}
@@ -716,25 +736,61 @@ export function LiveVideoPanel({
             />
           )
         ) : (
-          /* Case 3: Drone-Mounted Optical & Thermal Feeds */
+          /* Case 3: Drone-Mounted Optical & Thermal Feeds or Drone 1 Relay */
           <>
-            <img
-              src={droneCameraFeed}
-              alt="Live Camera Stream"
-              style={transformStyle}
-              className={`w-full h-full object-cover select-none pointer-events-none ${getLensSpecificFilter()}`}
-              referrerPolicy="no-referrer"
-            />
+            {(drone.id === "DRN-01" || activeSource.droneId === "DRN-01" || Boolean(activeSource.isDrone1Relay)) && (drone1Broadcast.isBroadcasting || activeSource.isDrone1Relay) ? (
+              (drone1Broadcast.isSelfBroadcasting || (activeSource.isDrone1Relay && activeSource.isSelf)) ? (
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  style={transformStyle}
+                  className={`w-full h-full object-cover select-none ${getLensSpecificFilter()}`}
+                />
+              ) : (
+                <img
+                  src={drone1RemoteFrame || remoteFrame || droneCameraFeed}
+                  alt="DRN-01 Live Relay Stream"
+                  style={transformStyle}
+                  className={`w-full h-full object-cover select-none ${getLensSpecificFilter()}`}
+                  referrerPolicy="no-referrer"
+                />
+              )
+            ) : (
+              <img
+                src={droneCameraFeed}
+                alt="Live Camera Stream"
+                style={transformStyle}
+                className={`w-full h-full object-cover select-none pointer-events-none ${getLensSpecificFilter()}`}
+                referrerPolicy="no-referrer"
+              />
+            )}
+
+            {/* Drone 1 Relay Active Banner Badge */}
+            {(drone.id === "DRN-01" || activeSource.droneId === "DRN-01" || Boolean(activeSource.isDrone1Relay)) && (drone1Broadcast.isBroadcasting || activeSource.isDrone1Relay) && (
+              <div className="absolute top-3 left-3 bg-emerald-950/90 backdrop-blur-sm border border-emerald-400/80 px-2.5 py-1 rounded text-[10px] font-mono text-emerald-200 pointer-events-none flex items-center gap-2 shadow-xl z-20">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                <Radio className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-white font-bold">DRN-01 LIVE RELAY:</span>
+                <span className="text-emerald-300 font-bold truncate max-w-[140px]">{drone1Broadcast.broadcasterName || activeSource.visitorName || "Broadcasting Device"}</span>
+                <span className="text-[8px] bg-emerald-500/25 text-emerald-200 px-1 py-0.2 rounded border border-emerald-400/50 font-bold uppercase tracking-wider">
+                  {drone1Broadcast.isSelfBroadcasting || activeSource.isSelf ? "THIS DEVICE" : "REMOTE VISITOR"}
+                </span>
+              </div>
+            )}
 
             {/* Lens Specific Stylized Watermark / Mode Stamp */}
-            <div className="absolute top-3 left-3 bg-black/65 backdrop-blur-sm border border-zinc-700/80 px-2.5 py-1 rounded text-[10px] font-mono text-zinc-200 pointer-events-none flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-              <span className="text-cyan-400 font-bold">{activeSource.shortLabel}</span>
-              <span className="text-zinc-400">|</span>
-              <span>{activeSource.fov}</span>
-              <span className="text-zinc-600">|</span>
-              <span className="text-zinc-400">{activeSource.sensorSpec}</span>
-            </div>
+            {(!((drone.id === "DRN-01" || activeSource.droneId === "DRN-01" || Boolean(activeSource.isDrone1Relay)) && (drone1Broadcast.isBroadcasting || activeSource.isDrone1Relay))) && (
+              <div className="absolute top-3 left-3 bg-black/65 backdrop-blur-sm border border-zinc-700/80 px-2.5 py-1 rounded text-[10px] font-mono text-zinc-200 pointer-events-none flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                <span className="text-cyan-400 font-bold">{activeSource.shortLabel}</span>
+                <span className="text-zinc-400">|</span>
+                <span>{activeSource.fov}</span>
+                <span className="text-zinc-600">|</span>
+                <span className="text-zinc-400">{activeSource.sensorSpec}</span>
+              </div>
+            )}
 
             {/* Downward Belly Cam Laser Landing Grid */}
             {activeSource.lensType === "belly-downward" && (

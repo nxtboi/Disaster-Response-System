@@ -24,6 +24,15 @@ interface CameraRendererProps {
   ptz: { pan: number; tilt: number };
   showAiBoxes: boolean;
   onSnapshot?: () => void;
+  drone1RemoteFrame?: string | null;
+  drone1Broadcast?: {
+    isBroadcasting: boolean;
+    broadcasterDeviceId?: string | null;
+    broadcasterName?: string | null;
+    hasLiveFrame?: boolean;
+    isSelfBroadcasting?: boolean;
+  };
+  localBroadcastStream?: MediaStream | null;
 }
 
 export function CameraRenderer({
@@ -33,9 +42,13 @@ export function CameraRenderer({
   zoom,
   ptz,
   showAiBoxes,
+  drone1RemoteFrame,
+  drone1Broadcast,
+  localBroadcastStream,
 }: CameraRendererProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const visitorVideoRef = useRef<HTMLVideoElement | null>(null);
+  const drone1VideoRef = useRef<HTMLVideoElement | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const visitorCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -45,6 +58,147 @@ export function CameraRenderer({
   const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
   const [remoteFrame, setRemoteFrame] = useState<string | null>(null);
   const [remoteFrameTimestamp, setRemoteFrameTimestamp] = useState<number>(0);
+
+  // Internal Drone 1 Relay sync state
+  const [drone1InternalState, setDrone1InternalState] = useState<{
+    isBroadcasting: boolean;
+    broadcasterName: string | null;
+    isSelf: boolean;
+    frame: string | null;
+  }>({
+    isBroadcasting: false,
+    broadcasterName: null,
+    isSelf: false,
+    frame: null,
+  });
+
+  const isDrone1 =
+    source.droneId === "DRN-01" ||
+    drone?.id === "DRN-01" ||
+    source.id.startsWith("DRN-01") ||
+    Boolean(source.isDrone1Relay);
+
+  // Listen to Drone 1 broadcast channel events and server endpoints
+  useEffect(() => {
+    if (!isDrone1) return;
+
+    let isMounted = true;
+    let channel: BroadcastChannel | null = null;
+    let pollTimer: number | null = null;
+    let isFetching = false;
+
+    // Direct intra-browser BroadcastChannel sync
+    try {
+      if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+        channel = new BroadcastChannel("drs_visitor_camera_network");
+        channel.onmessage = (event) => {
+          if (!isMounted) return;
+          const { type, frame, isBroadcasting, broadcasterName } = event.data || {};
+          if (type === "DRONE1_FRAME" && frame) {
+            setDrone1InternalState((prev) => ({
+              ...prev,
+              isBroadcasting: true,
+              frame,
+              broadcasterName: broadcasterName || prev.broadcasterName,
+            }));
+          } else if (type === "DRONE1_BROADCAST_STATE") {
+            setDrone1InternalState((prev) => ({
+              ...prev,
+              isBroadcasting: Boolean(isBroadcasting),
+              broadcasterName: broadcasterName || prev.broadcasterName,
+            }));
+          } else if (type === "DRONE1_STOP_BROADCAST") {
+            setDrone1InternalState({
+              isBroadcasting: false,
+              broadcasterName: null,
+              isSelf: false,
+              frame: null,
+            });
+          }
+        };
+      }
+    } catch {}
+
+    // Check server status
+    fetch("/api/drone1/broadcast")
+      .then((r) => r.json())
+      .then((data) => {
+        if (isMounted && data && data.isBroadcasting) {
+          setDrone1InternalState((prev) => ({
+            ...prev,
+            isBroadcasting: true,
+            broadcasterName: data.broadcasterName || prev.broadcasterName,
+          }));
+        }
+      })
+      .catch(() => {});
+
+    // Polling loop for remote frame when Drone 1 is broadcasting
+    const pollDrone1 = async () => {
+      if (isFetching) return;
+      try {
+        isFetching = true;
+        const res = await fetch("/api/drone1/frame");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (isMounted && data && data.frame) {
+          setDrone1InternalState((prev) => ({
+            ...prev,
+            isBroadcasting: true,
+            frame: data.frame,
+          }));
+        }
+      } catch {
+      } finally {
+        isFetching = false;
+      }
+    };
+
+    pollDrone1();
+    pollTimer = window.setInterval(pollDrone1, 100);
+
+    return () => {
+      isMounted = false;
+      if (channel) channel.close();
+      if (pollTimer) clearInterval(pollTimer);
+    };
+  }, [isDrone1]);
+
+  const isDrone1RelayActive =
+    isDrone1 &&
+    (Boolean(source.isDrone1Relay) ||
+      Boolean(drone1Broadcast?.isBroadcasting) ||
+      drone1InternalState.isBroadcasting);
+
+  const isSelfRelay = Boolean(
+    drone1Broadcast?.isSelfBroadcasting ||
+      drone1InternalState.isSelf ||
+      (source.isDrone1Relay && source.isSelf)
+  );
+
+  const activeDrone1Frame =
+    drone1RemoteFrame ||
+    drone1InternalState.frame ||
+    (source.isDrone1Relay ? source.stream ? null : remoteFrame : null);
+
+  const activeDroneFeedImage = (isDrone1RelayActive && activeDrone1Frame) ? activeDrone1Frame : droneCameraFeed;
+
+  const drone1BroadcasterName =
+    drone1Broadcast?.broadcasterName ||
+    drone1InternalState.broadcasterName ||
+    source.visitorName ||
+    "Live Device Broadcast";
+
+  // Bind local stream for Drone 1 if self broadcasting
+  useEffect(() => {
+    if (isDrone1RelayActive && isSelfRelay && drone1VideoRef.current) {
+      const targetStream = localBroadcastStream || source.stream || mediaStreamRef.current;
+      if (targetStream) {
+        drone1VideoRef.current.srcObject = targetStream;
+        drone1VideoRef.current.play().catch(() => {});
+      }
+    }
+  }, [isDrone1RelayActive, isSelfRelay, localBroadcastStream, source.stream]);
 
   // Filter styles
   const filterClass = {
@@ -540,7 +694,7 @@ export function CameraRenderer({
     return (
       <div className="w-full h-full relative overflow-hidden bg-black flex items-center justify-center">
         <img
-          src={droneCameraFeed}
+          src={activeDroneFeedImage}
           alt="Thermal IR Feed"
           style={transformStyle}
           className="w-full h-full object-cover hue-rotate-[190deg] invert contrast-[180%] saturate-[280%]"
@@ -564,7 +718,7 @@ export function CameraRenderer({
     return (
       <div className="w-full h-full relative overflow-hidden bg-black flex items-center justify-center">
         <img
-          src={droneCameraFeed}
+          src={activeDroneFeedImage}
           alt="Downward Belly Cam"
           style={transformStyle}
           className={`w-full h-full object-cover rotate-90 scale-125 opacity-90 ${filterClass}`}
@@ -590,7 +744,7 @@ export function CameraRenderer({
     return (
       <div className="w-full h-full relative overflow-hidden bg-black flex items-center justify-center">
         <img
-          src={droneCameraFeed}
+          src={activeDroneFeedImage}
           alt="FPV Nose Cam"
           style={transformStyle}
           className={`w-full h-full object-cover scale-110 contrast-125 ${filterClass}`}
@@ -619,7 +773,7 @@ export function CameraRenderer({
     return (
       <div className="w-full h-full relative overflow-hidden bg-black flex items-center justify-center">
         <img
-          src={droneCameraFeed}
+          src={activeDroneFeedImage}
           alt="360 Wide Cam"
           style={transformStyle}
           className={`w-full h-full object-cover scale-x-125 scale-y-90 ${filterClass}`}
@@ -654,20 +808,44 @@ export function CameraRenderer({
   // 8. Default Forward 4K RGB Main Gimbal
   return (
     <div className="w-full h-full relative overflow-hidden bg-black flex items-center justify-center">
-      {drone && drone.cameraStatus !== "Active" ? (
+      {drone && drone.cameraStatus !== "Active" && !isDrone1RelayActive ? (
         <div className="flex flex-col items-center gap-2 text-zinc-600">
           <RadioReceiver className="w-8 h-8 opacity-50" />
           <span className="text-xs tracking-widest uppercase font-mono">Camera Offline / Standby</span>
         </div>
       ) : (
         <>
-          <img
-            src={droneCameraFeed}
-            alt="Drone Forward Cam"
-            style={transformStyle}
-            className={`w-full h-full object-cover ${filterClass}`}
-            referrerPolicy="no-referrer"
-          />
+          {isDrone1RelayActive && isSelfRelay ? (
+            <video
+              ref={drone1VideoRef}
+              autoPlay
+              playsInline
+              muted
+              style={transformStyle}
+              className={`w-full h-full object-cover select-none ${filterClass}`}
+            />
+          ) : (
+            <img
+              src={activeDroneFeedImage}
+              alt="Drone Forward Cam"
+              style={transformStyle}
+              className={`w-full h-full object-cover ${filterClass}`}
+              referrerPolicy="no-referrer"
+            />
+          )}
+
+          {/* Drone 1 Relay Tactical Status Badge */}
+          {isDrone1RelayActive && (
+            <div className="absolute top-2 left-2 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded bg-emerald-950/90 border border-emerald-400/80 shadow-xl text-[10px] font-mono text-emerald-200 pointer-events-none backdrop-blur-md">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              <Radio className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="font-bold text-white">DRN-01 RELAY:</span>
+              <span className="text-emerald-300 font-bold truncate max-w-[140px]">{drone1BroadcasterName}</span>
+              <span className="text-[8px] bg-emerald-500/20 text-emerald-300 px-1 py-0.2 rounded border border-emerald-400/50 font-bold uppercase tracking-wider ml-1">
+                {isSelfRelay ? "THIS DEVICE" : "REMOTE BROADCAST"}
+              </span>
+            </div>
+          )}
 
           {/* AI Bounding Boxes */}
           {showAiBoxes && (

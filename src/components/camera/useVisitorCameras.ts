@@ -21,6 +21,15 @@ export interface VisitorCameraNode {
   hasLiveFrame?: boolean;
 }
 
+export interface Drone1BroadcastInfo {
+  isBroadcasting: boolean;
+  broadcasterDeviceId: string | null;
+  broadcasterName: string | null;
+  hasLiveFrame: boolean;
+  isSelfBroadcasting: boolean;
+  lastSeen?: number;
+}
+
 // Preset tactical field scout cameras
 export const DEFAULT_TACTICAL_VISITORS: VisitorCameraNode[] = [
   {
@@ -165,6 +174,16 @@ export function useVisitorCameras(currentUsername: string = "Operator") {
     ...DEFAULT_TACTICAL_VISITORS,
   ]);
   const [isBroadcasting, setIsBroadcasting] = useState<boolean>(false);
+  const [broadcastAsDrone1, setBroadcastAsDrone1] = useState<boolean>(true);
+  const [drone1Broadcast, setDrone1Broadcast] = useState<Drone1BroadcastInfo>({
+    isBroadcasting: false,
+    broadcasterDeviceId: null,
+    broadcasterName: null,
+    hasLiveFrame: false,
+    isSelfBroadcasting: false,
+  });
+  const [drone1RemoteFrame, setDrone1RemoteFrame] = useState<string | null>(null);
+  const [drone1RemoteFrameTimestamp, setDrone1RemoteFrameTimestamp] = useState<number>(0);
   const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [broadcastError, setBroadcastError] = useState<string | null>(null);
@@ -174,11 +193,16 @@ export function useVisitorCameras(currentUsername: string = "Operator") {
   const hiddenVideoRef = useRef<HTMLVideoElement | null>(null);
   const hiddenCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const isBroadcastingRef = useRef<boolean>(false);
+  const broadcastAsDrone1Ref = useRef<boolean>(true);
 
-  // Sync state ref
+  // Sync state refs
   useEffect(() => {
     isBroadcastingRef.current = isBroadcasting;
   }, [isBroadcasting]);
+
+  useEffect(() => {
+    broadcastAsDrone1Ref.current = broadcastAsDrone1;
+  }, [broadcastAsDrone1]);
 
   // Helper to ensure root self node is always at index 0
   const mergeWithRootSelf = useCallback(
@@ -212,6 +236,17 @@ export function useVisitorCameras(currentUsername: string = "Operator") {
           return mergeWithRootSelf(serverList);
         });
       }
+
+      if (data && data.drone1Broadcast) {
+        setDrone1Broadcast((prev) => ({
+          ...prev,
+          isBroadcasting: Boolean(data.drone1Broadcast.isBroadcasting),
+          broadcasterDeviceId: data.drone1Broadcast.broadcasterDeviceId || null,
+          broadcasterName: data.drone1Broadcast.broadcasterName || null,
+          hasLiveFrame: Boolean(data.drone1Broadcast.hasLiveFrame),
+          isSelfBroadcasting: data.drone1Broadcast.broadcasterDeviceId === `visitor-self-${MY_DEVICE_ID}`,
+        }));
+      }
     } catch {
       // Fallback
     }
@@ -244,6 +279,26 @@ export function useVisitorCameras(currentUsername: string = "Operator") {
               };
               return mergeWithRootSelf([nodeWithSelf, ...withoutTarget]);
             });
+          }
+
+          if (data && data.drone1Broadcast) {
+            setDrone1Broadcast((prev) => ({
+              ...prev,
+              isBroadcasting: Boolean(data.drone1Broadcast.isBroadcasting),
+              broadcasterDeviceId: data.drone1Broadcast.broadcasterDeviceId || null,
+              broadcasterName: data.drone1Broadcast.broadcasterName || null,
+              hasLiveFrame: Boolean(data.hasDrone1LiveFrame || data.drone1Broadcast.hasLiveFrame),
+              isSelfBroadcasting: data.drone1Broadcast.broadcasterDeviceId === `visitor-self-${MY_DEVICE_ID}`,
+            }));
+          } else if (data && data.type === "DRONE1_BROADCAST_STATUS" && data.status) {
+            setDrone1Broadcast((prev) => ({
+              ...prev,
+              isBroadcasting: Boolean(data.status.isBroadcasting),
+              broadcasterDeviceId: data.status.broadcasterDeviceId || null,
+              broadcasterName: data.status.broadcasterName || null,
+              hasLiveFrame: Boolean(data.status.isBroadcasting),
+              isSelfBroadcasting: data.status.broadcasterDeviceId === `visitor-self-${MY_DEVICE_ID}`,
+            }));
           }
         } catch {}
       };
@@ -304,6 +359,39 @@ export function useVisitorCameras(currentUsername: string = "Operator") {
               }
               return prev;
             });
+          } else if (type === "DRONE1_FRAME") {
+            // Instant Drone 1 frame from broadcasting device
+            if (event.data?.frame) {
+              setDrone1RemoteFrame(event.data.frame);
+              setDrone1RemoteFrameTimestamp(event.data.timestamp || Date.now());
+              setDrone1Broadcast((prev) => ({
+                ...prev,
+                isBroadcasting: true,
+                hasLiveFrame: true,
+                broadcasterDeviceId: event.data.broadcasterId || prev.broadcasterDeviceId,
+                broadcasterName: event.data.broadcasterName || prev.broadcasterName,
+                isSelfBroadcasting: event.data.broadcasterId === `visitor-self-${MY_DEVICE_ID}`,
+              }));
+            }
+          } else if (type === "DRONE1_BROADCAST_STATE") {
+            setDrone1Broadcast((prev) => ({
+              ...prev,
+              isBroadcasting: Boolean(event.data.isBroadcasting),
+              broadcasterDeviceId: event.data.broadcasterId || null,
+              broadcasterName: event.data.broadcasterName || null,
+              hasLiveFrame: Boolean(event.data.isBroadcasting),
+              isSelfBroadcasting: event.data.broadcasterId === `visitor-self-${MY_DEVICE_ID}`,
+            }));
+          } else if (type === "DRONE1_STOP_BROADCAST") {
+            setDrone1Broadcast((prev) => ({
+              ...prev,
+              isBroadcasting: false,
+              hasLiveFrame: false,
+              broadcasterDeviceId: null,
+              broadcasterName: null,
+              isSelfBroadcasting: false,
+            }));
+            setDrone1RemoteFrame(null);
           } else if (type === "VISITOR_LEAVE" && payload?.visitorId) {
             setVisitors((prev) => prev.filter((v) => v.id !== payload.visitorId));
           }
@@ -316,8 +404,41 @@ export function useVisitorCameras(currentUsername: string = "Operator") {
     };
   }, []);
 
+  // Continuous remote frame fetch loop when another device is broadcasting Drone 1
+  useEffect(() => {
+    if (!drone1Broadcast.isBroadcasting || isBroadcasting) return;
+
+    let isMounted = true;
+    let isFetching = false;
+
+    const pollDrone1Frame = async () => {
+      if (isFetching) return;
+      try {
+        isFetching = true;
+        const res = await fetch("/api/drone1/frame");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (isMounted && data && data.frame) {
+          setDrone1RemoteFrame(data.frame);
+          setDrone1RemoteFrameTimestamp(data.timestamp || Date.now());
+        }
+      } catch {
+      } finally {
+        isFetching = false;
+      }
+    };
+
+    pollDrone1Frame();
+    const timer = window.setInterval(pollDrone1Frame, 95);
+
+    return () => {
+      isMounted = false;
+      clearInterval(timer);
+    };
+  }, [drone1Broadcast.isBroadcasting, isBroadcasting]);
+
   // Frame Capture and Server Streaming Loop
-  const startFrameStreaming = useCallback((stream: MediaStream, selfId: string) => {
+  const startFrameStreaming = useCallback((stream: MediaStream, selfId: string, broadcasterName: string) => {
     // Create hidden video element if needed
     if (!hiddenVideoRef.current) {
       const video = document.createElement("video");
@@ -369,13 +490,28 @@ export function useVisitorCameras(currentUsername: string = "Operator") {
                 frame: base64Frame,
                 timestamp: Date.now(),
               });
+
+              // Relay direct to Drone 1 on all browser tabs
+              if (broadcastAsDrone1Ref.current) {
+                broadcastChannelRef.current.postMessage({
+                  type: "DRONE1_FRAME",
+                  frame: base64Frame,
+                  broadcasterId: selfId,
+                  broadcasterName: broadcasterName,
+                  timestamp: Date.now(),
+                });
+              }
             } catch {}
           }
 
+          // Relay to server (with asDrone1 flag to simultaneously update Drone 1 frame for all remote devices)
           await fetch(`/api/visitors/${encodeURIComponent(selfId)}/frame`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ frame: base64Frame }),
+            body: JSON.stringify({
+              frame: base64Frame,
+              asDrone1: broadcastAsDrone1Ref.current,
+            }),
           }).catch(() => {});
         }
       } catch {
@@ -439,7 +575,7 @@ export function useVisitorCameras(currentUsername: string = "Operator") {
         id: selfId,
         visitorId: `DEV-${MY_DEVICE_ID.toUpperCase().slice(-6)}`,
         visitorName: `${currentUsername} (${detectDeviceLabel()})`,
-        visitorRole: "Active Mobile Operator",
+        visitorRole: broadcastAsDrone1Ref.current ? "DRN-01 Relay Broadcaster" : "Active Mobile Operator",
         visitorLocation: "Live Remote Stream",
         resolution: "1080p 60FPS",
         fov: targetFacing === "environment" ? "110° Ultra-Wide" : "84° Wide Optical",
@@ -475,8 +611,41 @@ export function useVisitorCameras(currentUsername: string = "Operator") {
         } catch {}
       }
 
+      // If broadcasting as Drone 1, notify server and BroadcastChannel
+      if (broadcastAsDrone1Ref.current) {
+        fetch("/api/drone1/broadcast", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            isBroadcasting: true,
+            deviceId: selfId,
+            broadcasterName: selfNode.visitorName,
+          }),
+        }).catch(() => {});
+
+        if (broadcastChannelRef.current) {
+          try {
+            broadcastChannelRef.current.postMessage({
+              type: "DRONE1_BROADCAST_STATE",
+              isBroadcasting: true,
+              broadcasterId: selfId,
+              broadcasterName: selfNode.visitorName,
+            });
+          } catch {}
+        }
+
+        setDrone1Broadcast({
+          isBroadcasting: true,
+          broadcasterDeviceId: selfId,
+          broadcasterName: selfNode.visitorName,
+          hasLiveFrame: true,
+          isSelfBroadcasting: true,
+          lastSeen: Date.now(),
+        });
+      }
+
       // Start frame streaming to server so ALL other physical devices see it
-      startFrameStreaming(stream, selfId);
+      startFrameStreaming(stream, selfId, selfNode.visitorName);
     } catch (err: any) {
       console.warn("Could not capture camera for visitor broadcast:", err);
       setBroadcastError("Camera access was denied or is currently in use.");
@@ -510,6 +679,36 @@ export function useVisitorCameras(currentUsername: string = "Operator") {
           payload: { visitorId: selfId },
         });
       } catch {}
+    }
+
+    // Stop Drone 1 broadcast relay if active
+    if (broadcastAsDrone1Ref.current) {
+      fetch("/api/drone1/broadcast", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          isBroadcasting: false,
+          deviceId: selfId,
+        }),
+      }).catch(() => {});
+
+      if (broadcastChannelRef.current) {
+        try {
+          broadcastChannelRef.current.postMessage({
+            type: "DRONE1_STOP_BROADCAST",
+            broadcasterId: selfId,
+          });
+        } catch {}
+      }
+
+      setDrone1Broadcast((prev) => ({
+        ...prev,
+        isBroadcasting: false,
+        hasLiveFrame: false,
+        broadcasterDeviceId: null,
+        broadcasterName: null,
+        isSelfBroadcasting: false,
+      }));
     }
   }, [localStream, stopFrameStreaming]);
 
@@ -605,5 +804,11 @@ export function useVisitorCameras(currentUsername: string = "Operator") {
     activeVisitorCount: visitors.filter((v) => v.status === "ONLINE").length,
     realDeviceCount,
     myDeviceId: MY_DEVICE_ID,
+    broadcastAsDrone1,
+    setBroadcastAsDrone1,
+    toggleBroadcastAsDrone1: () => setBroadcastAsDrone1((prev) => !prev),
+    drone1Broadcast,
+    drone1RemoteFrame,
+    drone1RemoteFrameTimestamp,
   };
 }

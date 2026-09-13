@@ -38,6 +38,7 @@ export interface CameraSourceInfo {
   isRoot?: boolean;
   isRealDevice?: boolean;
   hasLiveFrame?: boolean;
+  isDrone1Relay?: boolean;
   stream?: MediaStream;
 }
 
@@ -94,7 +95,12 @@ export function getAvailableCameraSources(
   drones: Drone[],
   hardwareDevices?: MediaDeviceInfo[],
   onlyAvailable: boolean = false,
-  visitorSources?: CameraSourceInfo[]
+  visitorSources?: CameraSourceInfo[],
+  drone1Broadcast?: {
+    isBroadcasting: boolean;
+    broadcasterName?: string | null;
+    isSelfBroadcasting?: boolean;
+  }
 ): CameraSourceInfo[] {
   const sources: CameraSourceInfo[] = [];
 
@@ -147,19 +153,29 @@ export function getAvailableCameraSources(
       ? "OFFLINE"
       : "STANDBY";
 
-    // 1. Forward 4K RGB Gimbal
+    const isDrone1Relaying =
+      (drone.id === "DRN-01" || drone.id === "drone-1") &&
+      Boolean(drone1Broadcast?.isBroadcasting);
+
+    // 1. Forward 4K RGB Gimbal (or Live Device Relay if broadcasting as Drone 1)
     sources.push({
       id: `${drone.id}-rgb-gimbal`,
-      label: `${drone.name} • 4K RGB Main Gimbal`,
-      shortLabel: `${drone.name} FWD`,
+      label: isDrone1Relaying
+        ? `${drone.name} • ★ LIVE DEVICE RELAY (${drone1Broadcast?.broadcasterName || "Operator"})`
+        : `${drone.name} • 4K RGB Main Gimbal`,
+      shortLabel: isDrone1Relaying ? `${drone.name} [RELAY]` : `${drone.name} FWD`,
       droneId: drone.id,
       droneName: drone.name,
       lensType: "rgb-gimbal",
-      lensName: "4K RGB Gimbal",
-      resolution: "4K UHD 60FPS",
-      fov: "84° Zoom",
-      status: cameraStatus,
-      sensorSpec: "1/1.3\" CMOS 48MP F/1.7",
+      lensName: isDrone1Relaying ? "Live Operator Device Relay" : "4K RGB Gimbal",
+      resolution: isDrone1Relaying ? "1080p 60FPS" : "4K UHD 60FPS",
+      fov: isDrone1Relaying ? "110° Tactical Relay" : "84° Zoom",
+      status: isDrone1Relaying ? "ONLINE" : cameraStatus,
+      sensorSpec: isDrone1Relaying
+        ? `Live P2P Device Broadcast Link (${drone1Broadcast?.broadcasterName || "Operator"})`
+        : "1/1.3\" CMOS 48MP F/1.7",
+      hasLiveFrame: isDrone1Relaying ? true : undefined,
+      isDrone1Relay: isDrone1Relaying,
     });
 
     // 2. FLIR Thermal Radiometric

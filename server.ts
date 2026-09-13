@@ -26,6 +26,23 @@ const visitorNodes = new Map<string, VisitorNode>();
 const visitorFrames = new Map<string, { frame: string; timestamp: number }>();
 const sseClients = new Set<express.Response>();
 
+// Drone 1 Broadcast Relay State - Relays a connected device's live broadcast as Drone 1's main camera feed
+interface Drone1BroadcastState {
+  isBroadcasting: boolean;
+  broadcasterDeviceId: string | null;
+  broadcasterName: string | null;
+  lastSeen: number;
+}
+
+let drone1BroadcastState: Drone1BroadcastState = {
+  isBroadcasting: false,
+  broadcasterDeviceId: null,
+  broadcasterName: null,
+  lastSeen: 0,
+};
+
+let drone1Frame: { frame: string; timestamp: number; broadcasterDeviceId?: string } | null = null;
+
 // Preset field team scouts
 const PRESET_TACTICAL_VISITORS: VisitorNode[] = [
   {
@@ -121,6 +138,22 @@ setInterval(() => {
       changed = true;
     }
   }
+
+  // Cleanup expired Drone 1 broadcast stream
+  if (drone1BroadcastState.isBroadcasting && now - drone1BroadcastState.lastSeen > 18000) {
+    drone1BroadcastState = {
+      isBroadcasting: false,
+      broadcasterDeviceId: null,
+      broadcasterName: null,
+      lastSeen: 0,
+    };
+    drone1Frame = null;
+    broadcastSSE({
+      type: "DRONE1_BROADCAST_STATUS",
+      status: drone1BroadcastState,
+    });
+  }
+
   if (changed) {
     broadcastSSE({
       type: "VISITORS_UPDATE",
@@ -310,7 +343,14 @@ async function startServer() {
       "Access-Control-Allow-Origin": "*",
     });
 
-    res.write(`data: ${JSON.stringify({ type: "INIT", visitors: Array.from(visitorNodes.values()) })}\n\n`);
+    res.write(
+      `data: ${JSON.stringify({
+        type: "INIT",
+        visitors: Array.from(visitorNodes.values()),
+        drone1Broadcast: drone1BroadcastState,
+        hasDrone1LiveFrame: Boolean(drone1Frame && Date.now() - drone1Frame.timestamp < 15000),
+      })}\n\n`
+    );
     sseClients.add(res);
 
     const keepAliveTimer = setInterval(() => {
@@ -331,7 +371,74 @@ async function startServer() {
         ...v,
         hasLiveFrame: visitorFrames.has(v.id),
       })),
+      drone1Broadcast: drone1BroadcastState,
     });
+  });
+
+  // Drone 1 Broadcast Relay Status
+  app.get("/api/drone1/broadcast", (_req, res) => {
+    res.json({
+      success: true,
+      ...drone1BroadcastState,
+      hasLiveFrame: Boolean(drone1Frame && Date.now() - drone1Frame.timestamp < 15000),
+    });
+  });
+
+  // Drone 1 Broadcast Relay Control (Start / Stop)
+  app.post("/api/drone1/broadcast", (req, res) => {
+    const { isBroadcasting, deviceId, broadcasterName } = req.body || {};
+    drone1BroadcastState = {
+      isBroadcasting: Boolean(isBroadcasting),
+      broadcasterDeviceId: isBroadcasting ? (deviceId || null) : null,
+      broadcasterName: isBroadcasting ? (broadcasterName || "Field Operator") : null,
+      lastSeen: Date.now(),
+    };
+    if (!isBroadcasting) {
+      drone1Frame = null;
+    }
+    broadcastSSE({
+      type: "DRONE1_BROADCAST_STATUS",
+      status: drone1BroadcastState,
+    });
+    res.json({ success: true, status: drone1BroadcastState });
+  });
+
+  // Retrieve the latest live frame for Drone 1
+  app.get("/api/drone1/frame", (_req, res) => {
+    if (!drone1Frame || Date.now() - drone1Frame.timestamp > 15000) {
+      return res.status(404).json({ error: "No active live frame for Drone 1" });
+    }
+
+    res.json({
+      success: true,
+      frame: drone1Frame.frame,
+      timestamp: drone1Frame.timestamp,
+      ageMs: Date.now() - drone1Frame.timestamp,
+      broadcasterName: drone1BroadcastState.broadcasterName,
+      broadcasterDeviceId: drone1BroadcastState.broadcasterDeviceId,
+    });
+  });
+
+  // Direct upload of live frame for Drone 1
+  app.post("/api/drone1/frame", (req, res) => {
+    const { frame, deviceId, broadcasterName } = req.body || {};
+    if (!frame) {
+      return res.status(400).json({ error: "Missing frame data" });
+    }
+
+    drone1Frame = {
+      frame,
+      timestamp: Date.now(),
+      broadcasterDeviceId: deviceId,
+    };
+    drone1BroadcastState = {
+      isBroadcasting: true,
+      broadcasterDeviceId: deviceId || drone1BroadcastState.broadcasterDeviceId || "remote-device",
+      broadcasterName: broadcasterName || drone1BroadcastState.broadcasterName || "Field Operator",
+      lastSeen: Date.now(),
+    };
+
+    res.json({ success: true, timestamp: Date.now() });
   });
 
   // Register / Announce a new visitor device broadcasting its camera
@@ -374,13 +481,17 @@ async function startServer() {
       visitorNodes.set(id, existing);
     }
 
+    if (drone1BroadcastState.broadcasterDeviceId === id) {
+      drone1BroadcastState.lastSeen = Date.now();
+    }
+
     res.json({ success: true, alive: !!existing });
   });
 
   // Upload a live video frame from the broadcasting device
   app.post("/api/visitors/:id/frame", (req, res) => {
     const { id } = req.params;
-    const { frame } = req.body;
+    const { frame, asDrone1 } = req.body;
     if (!id || !frame) {
       return res.status(400).json({ error: "Missing id or frame data" });
     }
@@ -394,6 +505,21 @@ async function startServer() {
     if (existing) {
       existing.lastSeen = Date.now();
       existing.hasLiveFrame = true;
+    }
+
+    // Mirror frame to Drone 1 if flagged or if this device is registered as Drone 1 broadcaster
+    if (asDrone1 || drone1BroadcastState.broadcasterDeviceId === id) {
+      drone1Frame = {
+        frame,
+        timestamp: Date.now(),
+        broadcasterDeviceId: id,
+      };
+      drone1BroadcastState.isBroadcasting = true;
+      drone1BroadcastState.broadcasterDeviceId = id;
+      if (existing?.visitorName) {
+        drone1BroadcastState.broadcasterName = existing.visitorName;
+      }
+      drone1BroadcastState.lastSeen = Date.now();
     }
 
     res.json({ success: true, timestamp: Date.now() });
@@ -422,6 +548,21 @@ async function startServer() {
     if (id) {
       visitorNodes.delete(id);
       visitorFrames.delete(id);
+
+      if (drone1BroadcastState.broadcasterDeviceId === id) {
+        drone1BroadcastState = {
+          isBroadcasting: false,
+          broadcasterDeviceId: null,
+          broadcasterName: null,
+          lastSeen: 0,
+        };
+        drone1Frame = null;
+        broadcastSSE({
+          type: "DRONE1_BROADCAST_STATUS",
+          status: drone1BroadcastState,
+        });
+      }
+
       broadcastSSE({
         type: "VISITOR_LEFT",
         id,

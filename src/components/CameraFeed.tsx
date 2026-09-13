@@ -57,8 +57,14 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
     toggleBroadcasting,
     switchCameraFacing,
     facingMode,
+    localStream,
     activeVisitorCount,
     realDeviceCount,
+    broadcastAsDrone1,
+    setBroadcastAsDrone1,
+    toggleBroadcastAsDrone1,
+    drone1Broadcast,
+    drone1RemoteFrame,
   } = useCameraSources(drones, true, currentUser?.username || "Operator");
 
   const defaultSourceId = targetDrone
@@ -683,21 +689,37 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
               </span>
             </div>
 
-            {/* Broadcast My Camera button inside selector header */}
-            <div className="flex items-center gap-2">
+            {/* Broadcast My Camera button & Drone 1 Relay toggle inside selector header */}
+            <div className="flex items-center gap-1.5">
               <button
+                type="button"
+                onClick={toggleBroadcastAsDrone1}
+                className={`px-2 py-0.5 rounded text-[9px] font-mono flex items-center gap-1 border transition-all ${
+                  broadcastAsDrone1
+                    ? "bg-emerald-500/20 text-emerald-300 border-emerald-400 font-bold shadow-[0_0_8px_rgba(16,185,129,0.25)]"
+                    : "bg-zinc-900 text-zinc-500 border-zinc-700 hover:text-zinc-300"
+                }`}
+                title="When broadcasting, display this device as Drone 1 on all other devices"
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${broadcastAsDrone1 ? "bg-emerald-400 animate-ping" : "bg-zinc-600"}`} />
+                <span>RELAY AS DRN-01: {broadcastAsDrone1 ? "ON" : "OFF"}</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={toggleBroadcasting}
                 className={`px-2 py-0.5 rounded text-[10px] flex items-center gap-1 border transition-colors ${
                   isBroadcasting
                     ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/50 font-bold"
                     : "bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-zinc-200"
                 }`}
-                title="Broadcast your camera as a visitor node"
+                title="Broadcast your camera as a live node"
               >
                 <Radio className={`w-3 h-3 ${isBroadcasting ? "text-emerald-400 animate-pulse" : "text-zinc-400"}`} />
                 <span>{isBroadcasting ? "BROADCASTING" : "BROADCAST MY CAM"}</span>
               </button>
               <button
+                type="button"
                 onClick={() => setShowSelectorMenu(false)}
                 className="text-xs text-zinc-400 hover:text-zinc-100 p-1"
               >
@@ -820,12 +842,31 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
           ptz={ptz}
           showAiBoxes={showAiBoxes}
           onSnapshot={takeSnapshot}
+          drone1RemoteFrame={drone1RemoteFrame}
+          drone1Broadcast={drone1Broadcast}
+          localBroadcastStream={localStream}
         />
 
         {/* REAL-TIME DATA OVERLAY HUD COMPONENT */}
         <div className="absolute inset-0 pointer-events-none p-2.5 flex flex-col justify-between z-10">
+          {/* Drone 1 Live Relay Banner */}
+          {!isVisitorFeed && drone1Broadcast.isBroadcasting && (
+            <div className="w-full mb-1.5 flex items-center justify-between bg-emerald-950/90 border border-emerald-400/80 rounded px-2 py-1 shadow-2xl backdrop-blur-md pointer-events-auto">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0" />
+                <Radio className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span className="text-[10px] font-mono text-emerald-300 font-bold truncate">
+                  DRN-01 LIVE DEVICE RELAY: {drone1Broadcast.broadcasterName || "Broadcasting Device"}
+                </span>
+              </div>
+              <span className="text-[8px] bg-emerald-500/30 text-emerald-200 px-1.5 py-0.5 rounded font-bold font-mono border border-emerald-400/50">
+                {drone1Broadcast.isSelfBroadcasting ? "YOUR DEVICE" : "REMOTE VISITOR"}
+              </span>
+            </div>
+          )}
+
           {/* Top Real-time telemetry row or live visitor broadcast alert banner */}
-          {!isVisitorFeed && liveBroadcastingVisitors.length > 0 && (
+          {!isVisitorFeed && !drone1Broadcast.isBroadcasting && liveBroadcastingVisitors.length > 0 && (
             <div className="w-full mb-1.5 flex items-center justify-between bg-black/90 border border-emerald-400/80 rounded px-2 py-1 shadow-2xl backdrop-blur-md pointer-events-auto">
               <div className="flex items-center gap-1.5 min-w-0">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0" />

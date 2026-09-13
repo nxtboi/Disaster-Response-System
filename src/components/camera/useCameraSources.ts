@@ -18,9 +18,16 @@ export function useCameraSources(
     toggleBroadcasting,
     switchCameraFacing,
     facingMode,
+    localStream,
     activeVisitorCount,
     realDeviceCount,
     myDeviceId,
+    broadcastAsDrone1,
+    setBroadcastAsDrone1,
+    toggleBroadcastAsDrone1,
+    drone1Broadcast,
+    drone1RemoteFrame,
+    drone1RemoteFrameTimestamp,
   } = useVisitorCameras(currentUsername);
 
   useEffect(() => {
@@ -54,8 +61,8 @@ export function useCameraSources(
     };
   }, []);
 
-  const sources = getAvailableCameraSources(drones, hardwareDevices, onlyAvailable, visitorSources);
-  const allSources = getAvailableCameraSources(drones, hardwareDevices, false, visitorSources);
+  const sources = getAvailableCameraSources(drones, hardwareDevices, onlyAvailable, visitorSources, drone1Broadcast);
+  const allSources = getAvailableCameraSources(drones, hardwareDevices, false, visitorSources, drone1Broadcast);
 
   return {
     sources, // only available sources when onlyAvailable = true
@@ -69,8 +76,15 @@ export function useCameraSources(
     toggleBroadcasting,
     switchCameraFacing,
     facingMode,
+    localStream,
     activeVisitorCount,
     realDeviceCount,
     myDeviceId,
+    broadcastAsDrone1,
+    setBroadcastAsDrone1,
+    toggleBroadcastAsDrone1,
+    drone1Broadcast,
+    drone1RemoteFrame,
+    drone1RemoteFrameTimestamp,
   };
 }

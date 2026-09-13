@@ -93,19 +93,33 @@ export const DEFAULT_TACTICAL_VISITORS: VisitorCameraNode[] = [
   },
 ];
 
-// Generate or retrieve persistent Device Client ID for cross-device identification
+// Generate or retrieve window-scoped Device Client ID for distinct cross-window and cross-device identification
 function getOrCreateDeviceId(): string {
   try {
-    let id = localStorage.getItem("drs_persistent_device_id");
+    let id = sessionStorage.getItem("drs_window_visitor_id");
     if (!id) {
       const rand = Math.random().toString(36).substring(2, 8);
       const isMobile = typeof navigator !== "undefined" && /iPhone|iPad|Android/i.test(navigator.userAgent);
-      id = `dev_${isMobile ? "mobile" : "host"}_${rand}`;
-      localStorage.setItem("drs_persistent_device_id", id);
+      id = `dev_${isMobile ? "mobile" : "client"}_${rand}`;
+      sessionStorage.setItem("drs_window_visitor_id", id);
     }
     return id;
   } catch {
-    return `dev_${Math.random().toString(36).substring(2, 8)}`;
+    return `dev_client_${Math.random().toString(36).substring(2, 8)}`;
+  }
+}
+
+function getWindowVisitorTag(): string {
+  try {
+    let tag = sessionStorage.getItem("drs_window_visitor_tag");
+    if (!tag) {
+      const num = Math.floor(100 + Math.random() * 900);
+      tag = `#${num}`;
+      sessionStorage.setItem("drs_window_visitor_tag", tag);
+    }
+    return tag;
+  } catch {
+    return "#1";
   }
 }
 
@@ -121,18 +135,19 @@ function detectDeviceLabel(): string {
 }
 
 const MY_DEVICE_ID = getOrCreateDeviceId();
+const MY_VISITOR_TAG = getWindowVisitorTag();
 
 function createRootSelfNode(currentUsername: string, localStream: MediaStream | null, isBroadcasting: boolean): VisitorCameraNode {
   return {
     id: `visitor-self-${MY_DEVICE_ID}`,
-    visitorId: `ROOT-${MY_DEVICE_ID.toUpperCase().slice(-6)}`,
-    visitorName: `★ Root Device (${currentUsername || "Operator"})`,
-    visitorRole: isBroadcasting ? "Active Root Broadcaster" : "Root Host / Primary Device",
-    visitorLocation: "Host Console (Root)",
+    visitorId: `DEV-${MY_DEVICE_ID.toUpperCase().slice(-6)}`,
+    visitorName: `★ This Device (${currentUsername || "Visitor"} ${MY_VISITOR_TAG})`,
+    visitorRole: isBroadcasting ? "Active Broadcaster" : "Local Operator",
+    visitorLocation: "Local Console",
     resolution: "1080p 60FPS",
     fov: "84° Wide Optical",
     status: "ONLINE",
-    sensorSpec: `${detectDeviceLabel()} • Direct Root WebRTC Sensor`,
+    sensorSpec: `${detectDeviceLabel()} • Direct WebRTC Sensor`,
     latencyMs: 0,
     battery: 100,
     isSelf: true,
@@ -265,7 +280,7 @@ export function useVisitorCameras(currentUsername: string = "Operator") {
         broadcastChannelRef.current = channel;
 
         channel.onmessage = (event) => {
-          const { type, payload } = event.data || {};
+          const { type, payload, id } = event.data || {};
           if (type === "VISITOR_ANNOUNCE" || type === "VISITOR_HEARTBEAT") {
             if (payload && payload.id !== `visitor-self-${MY_DEVICE_ID}`) {
               setVisitors((prev) => {
@@ -278,6 +293,17 @@ export function useVisitorCameras(currentUsername: string = "Operator") {
                 return [payload, ...prev];
               });
             }
+          } else if (type === "VISITOR_FRAME" && id && id !== `visitor-self-${MY_DEVICE_ID}`) {
+            // Instant marker that another visitor node has an active live camera frame
+            setVisitors((prev) => {
+              const idx = prev.findIndex((v) => v.id === id);
+              if (idx >= 0 && !prev[idx].hasLiveFrame) {
+                const updated = [...prev];
+                updated[idx] = { ...updated[idx], hasLiveFrame: true, lastSeen: Date.now() };
+                return updated;
+              }
+              return prev;
+            });
           } else if (type === "VISITOR_LEAVE" && payload?.visitorId) {
             setVisitors((prev) => prev.filter((v) => v.id !== payload.visitorId));
           }
@@ -333,6 +359,18 @@ export function useVisitorCameras(currentUsername: string = "Operator") {
         if (ctx) {
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
           const base64Frame = canvas.toDataURL("image/jpeg", 0.55);
+
+          // Zero-latency direct stream over BroadcastChannel for all tabs/windows in the browser
+          if (broadcastChannelRef.current) {
+            try {
+              broadcastChannelRef.current.postMessage({
+                type: "VISITOR_FRAME",
+                id: selfId,
+                frame: base64Frame,
+                timestamp: Date.now(),
+              });
+            } catch {}
+          }
 
           await fetch(`/api/visitors/${encodeURIComponent(selfId)}/frame`, {
             method: "POST",

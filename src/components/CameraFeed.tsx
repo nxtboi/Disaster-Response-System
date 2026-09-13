@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useDRS } from "../store";
 import {
   Maximize2,
@@ -113,21 +113,45 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
     return true;
   });
 
-  // Visitor quick cycle helper
-  const allVisitorList = availableSources.filter((s) => s.lensType === "visitor-camera");
-  const currentVisitorIdx = allVisitorList.findIndex((s) => s.id === activeSource?.id);
+  // Other connected website visitors and field scouts (excluding this local device)
+  const otherVisitors = useMemo(() => {
+    return availableSources.filter(
+      (s) => s.lensType === "visitor-camera" && !s.isSelf && !s.isRoot
+    );
+  }, [availableSources]);
+
+  // Real visitors or units currently actively broadcasting live video
+  const liveBroadcastingVisitors = useMemo(() => {
+    return otherVisitors.filter(
+      (s) => s.hasLiveFrame || (s.isRealDevice && s.status === "ONLINE")
+    );
+  }, [otherVisitors]);
+
+  // Visitor quick cycle helper through other website visitors
+  const currentVisitorIdx = otherVisitors.findIndex((s) => s.id === activeSource?.id);
 
   const cycleVisitor = (direction: "next" | "prev") => {
-    if (allVisitorList.length === 0) return;
+    if (otherVisitors.length === 0) return;
     if (currentVisitorIdx === -1) {
-      setSelectedSourceId(allVisitorList[0].id);
+      setSelectedSourceId(otherVisitors[0].id);
       return;
     }
     const nextIdx =
       direction === "next"
-        ? (currentVisitorIdx + 1) % allVisitorList.length
-        : (currentVisitorIdx - 1 + allVisitorList.length) % allVisitorList.length;
-    setSelectedSourceId(allVisitorList[nextIdx].id);
+        ? (currentVisitorIdx + 1) % otherVisitors.length
+        : (currentVisitorIdx - 1 + otherVisitors.length) % otherVisitors.length;
+    setSelectedSourceId(otherVisitors[nextIdx].id);
+  };
+
+  const switchToVisitorBroadcast = () => {
+    const target = liveBroadcastingVisitors[0] || otherVisitors[0];
+    if (target) {
+      setSelectedSourceId(target.id);
+    }
+  };
+
+  const switchToDroneCam = () => {
+    setSelectedSourceId(defaultSourceId);
   };
 
   // Recording counter
@@ -298,8 +322,47 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
             </div>
           )}
 
-          {/* If viewing visitor, quick cycle arrow buttons */}
-          {isVisitorFeed && allVisitorList.length > 1 && !isTiny && (
+          {/* Quick Toggle: Switch between Visitor Broadcasts and Drone Camera */}
+          {!isVisitorFeed ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                switchToVisitorBroadcast();
+              }}
+              className={`flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-bold transition-all ${
+                liveBroadcastingVisitors.length > 0
+                  ? "bg-emerald-950/90 border-emerald-400 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.3)] animate-pulse hover:bg-emerald-900"
+                  : "bg-zinc-900/90 border-zinc-700/80 text-zinc-300 hover:text-emerald-300 hover:border-emerald-500/50"
+              }`}
+              title={`View other website visitors' broadcasts (${otherVisitors.length} available, ${liveBroadcastingVisitors.length} live)`}
+            >
+              <Users className="w-3 h-3 text-emerald-400 shrink-0" />
+              {!isTiny && (
+                <span>
+                  {liveBroadcastingVisitors.length > 0
+                    ? `LIVE VISITOR (${liveBroadcastingVisitors.length})`
+                    : `VISITORS (${otherVisitors.length})`}
+                </span>
+              )}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                switchToDroneCam();
+              }}
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded border border-cyan-500/50 bg-cyan-950/70 text-cyan-200 hover:bg-cyan-900/70 text-[10px] font-bold transition-colors"
+              title="Return to Drone Forward Camera"
+            >
+              <Video className="w-3 h-3 text-cyan-400 shrink-0" />
+              {!isTiny && <span>DRONE CAM</span>}
+            </button>
+          )}
+
+          {/* If viewing visitor, quick cycle arrow buttons through other visitors */}
+          {isVisitorFeed && otherVisitors.length > 1 && !isTiny && (
             <div className="flex items-center gap-0.5 bg-zinc-950/70 border border-emerald-500/30 rounded px-1">
               <button
                 type="button"
@@ -313,7 +376,7 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
                 <ChevronLeft className="w-3 h-3" />
               </button>
               <span className="text-[9px] text-emerald-400 px-0.5">
-                {currentVisitorIdx + 1}/{allVisitorList.length}
+                {currentVisitorIdx >= 0 ? currentVisitorIdx + 1 : 1}/{otherVisitors.length}
               </span>
               <button
                 type="button"
@@ -719,6 +782,11 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
                               ROOT (YOU)
                             </span>
                           )}
+                          {src.hasLiveFrame && !isRootDevice && (
+                            <span className="text-[8px] px-1.5 py-0.2 bg-emerald-500/30 text-emerald-300 font-extrabold rounded border border-emerald-400 animate-pulse">
+                              LIVE STREAM
+                            </span>
+                          )}
                         </div>
                         <div className="text-[10px] text-zinc-500 truncate">
                           {src.resolution} • {src.sensorSpec}
@@ -756,6 +824,28 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
 
         {/* REAL-TIME DATA OVERLAY HUD COMPONENT */}
         <div className="absolute inset-0 pointer-events-none p-2.5 flex flex-col justify-between z-10">
+          {/* Top Real-time telemetry row or live visitor broadcast alert banner */}
+          {!isVisitorFeed && liveBroadcastingVisitors.length > 0 && (
+            <div className="w-full mb-1.5 flex items-center justify-between bg-black/90 border border-emerald-400/80 rounded px-2 py-1 shadow-2xl backdrop-blur-md pointer-events-auto">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0" />
+                <span className="text-[10px] font-mono text-emerald-300 font-bold truncate">
+                  LIVE VISITOR BROADCAST: {liveBroadcastingVisitors[0].visitorName || "Field Scout"}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedSourceId(liveBroadcastingVisitors[0].id);
+                }}
+                className="px-2 py-0.5 rounded bg-emerald-500 hover:bg-emerald-400 text-black text-[9px] font-mono font-bold transition-colors shrink-0 ml-2 shadow"
+              >
+                VIEW FEED ↗
+              </button>
+            </div>
+          )}
+
           {/* Top Real-time telemetry row or full overlay */}
           {!isVisitorFeed && hudMode === "full" && (
             <div className="w-full">
@@ -805,6 +895,62 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
               </div>
             </div>
           )}
+
+                    {/* Interactive Tactical Action Row above bottom telemetry */}
+          <div className="w-full flex items-center justify-between pointer-events-auto gap-2 mb-1">
+            {!isVisitorFeed ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  switchToVisitorBroadcast();
+                }}
+                className={`px-2.5 py-1 rounded-md text-[10px] font-mono flex items-center gap-1.5 shadow-xl backdrop-blur-md transition-all ${
+                  liveBroadcastingVisitors.length > 0
+                    ? "bg-emerald-950/90 border border-emerald-400 text-emerald-200 hover:bg-emerald-900 shadow-[0_0_12px_rgba(16,185,129,0.3)] animate-pulse"
+                    : "bg-black/80 hover:bg-zinc-900 border border-emerald-500/40 hover:border-emerald-400 text-emerald-300"
+                }`}
+                title="Switch this camera window to view other website visitors' broadcasts"
+              >
+                <Users className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="font-bold">
+                  {liveBroadcastingVisitors.length > 0
+                    ? `WATCH VISITOR BROADCAST (${liveBroadcastingVisitors.length} LIVE)`
+                    : `VIEW VISITOR BROADCAST (${otherVisitors.length})`}
+                </span>
+                <span className="text-[9px] text-emerald-400/80">↗</span>
+              </button>
+            ) : (
+              <div className="flex items-center justify-between w-full">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (typeof window !== "undefined") {
+                      window.open(window.location.href, "_blank");
+                    }
+                  }}
+                  className="px-2 py-0.5 rounded bg-black/80 hover:bg-zinc-900 border border-zinc-700 hover:border-zinc-500 text-zinc-300 text-[9px] font-mono flex items-center gap-1 shadow-lg backdrop-blur-md transition-colors"
+                  title="Open application in another tab or window to test live visitor broadcast"
+                >
+                  <span>+ OPEN 2ND VISITOR TAB</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    switchToDroneCam();
+                  }}
+                  className="px-2.5 py-0.5 rounded bg-cyan-950/90 hover:bg-cyan-900 border border-cyan-400 text-cyan-200 text-[10px] font-mono flex items-center gap-1.5 shadow-lg backdrop-blur-md font-bold transition-colors"
+                  title="Switch back to Forward Drone Camera"
+                >
+                  <Video className="w-3 h-3 text-cyan-400" />
+                  <span>RETURN TO DRONE CAM</span>
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Bottom Telemetry & REC Bar */}
           <div className="flex justify-between items-end text-[10px] text-cyan-400 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">

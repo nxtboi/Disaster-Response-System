@@ -138,7 +138,7 @@ export function CameraRenderer({
     }
   }, [source.lensType, source.stream]);
 
-  // Poll real-time live frames from backend server if viewing another device
+  // Poll real-time live frames from backend server if viewing another device + instant BroadcastChannel
   useEffect(() => {
     if (source.lensType !== "visitor-camera" || source.isSelf) {
       setRemoteFrame(null);
@@ -148,6 +148,22 @@ export function CameraRenderer({
     let isMounted = true;
     let pollTimer: number | null = null;
     let isFetching = false;
+    let channel: BroadcastChannel | null = null;
+
+    // Instant intra-browser zero-latency stream from other tabs/windows
+    try {
+      if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+        channel = new BroadcastChannel("drs_visitor_camera_network");
+        channel.onmessage = (event) => {
+          if (!isMounted) return;
+          const { type, id, frame, timestamp } = event.data || {};
+          if (type === "VISITOR_FRAME" && id === source.id && frame) {
+            setRemoteFrame(frame);
+            setRemoteFrameTimestamp(timestamp || Date.now());
+          }
+        };
+      }
+    } catch {}
 
     const fetchLiveFrame = async () => {
       if (isFetching) return;
@@ -155,7 +171,6 @@ export function CameraRenderer({
         isFetching = true;
         const res = await fetch(`/api/visitors/${encodeURIComponent(source.id)}/frame`);
         if (!res.ok) {
-          if (isMounted) setRemoteFrame(null);
           return;
         }
         const data = await res.json();
@@ -164,7 +179,7 @@ export function CameraRenderer({
           setRemoteFrameTimestamp(data.timestamp || Date.now());
         }
       } catch {
-        // Fallback to canvas
+        // Fallback to procedural simulation
       } finally {
         isFetching = false;
       }
@@ -173,12 +188,13 @@ export function CameraRenderer({
     // Immediate fetch
     fetchLiveFrame();
 
-    // Poll live frame stream at ~10 FPS (100ms)
+    // Poll live frame stream at ~10 FPS (100ms) for remote network devices
     pollTimer = window.setInterval(fetchLiveFrame, 100);
 
     return () => {
       isMounted = false;
       if (pollTimer) clearInterval(pollTimer);
+      if (channel) channel.close();
     };
   }, [source.lensType, source.id, source.isSelf]);
 

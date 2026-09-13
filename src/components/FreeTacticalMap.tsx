@@ -177,6 +177,7 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
     requestUserLocation,
     deployFleetToLocation,
     centerMapTarget,
+    setCenterMapTarget,
     waypoints,
     selectedWaypointId,
     setSelectedWaypointId,
@@ -199,7 +200,7 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
   const userAccuracyCircleRef = useRef<L.Circle | null>(null);
 
   const [tileStyle, setTileStyle] = useState<TileStyle>('dark');
-  const [isTracking, setIsTracking] = useState(true);
+  const [isTracking, setIsTracking] = useState(() => !centerMapTarget);
   const [showLayerMenu, setShowLayerMenu] = useState(false);
   const [layerCategory, setLayerCategory] = useState<string>('All');
   const [layerSearch, setLayerSearch] = useState<string>('');
@@ -276,20 +277,41 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
     tileLayerRef.current = tileLayer;
     mapInstanceRef.current = map;
 
-    // Immediately trigger invalidateSize and center verification
-    setTimeout(() => {
+    // Ensure container size updates smoothly with window/sidebar resizing
+    const resizeObserver = new ResizeObserver(() => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.invalidateSize();
+      }
+    });
+    if (mapContainerRef.current) {
+      resizeObserver.observe(mapContainerRef.current);
+    }
+
+    // Immediately trigger invalidateSize and center verification to position target in center of screen
+    const initTimer1 = setTimeout(() => {
       if (mapInstanceRef.current) {
         mapInstanceRef.current.invalidateSize();
         if (centerMapTarget) {
           setIsTracking(false);
-          mapInstanceRef.current.flyTo(
+          mapInstanceRef.current.setView(
             [centerMapTarget.lat, centerMapTarget.lng],
             centerMapTarget.zoom || 18,
-            { duration: 0.8 }
+            { animate: false }
           );
         }
       }
-    }, 150);
+    }, 60);
+
+    const initTimer2 = setTimeout(() => {
+      if (mapInstanceRef.current && centerMapTarget) {
+        mapInstanceRef.current.invalidateSize();
+        mapInstanceRef.current.setView(
+          [centerMapTarget.lat, centerMapTarget.lng],
+          centerMapTarget.zoom || 18,
+          { animate: false }
+        );
+      }
+    }, 250);
 
     map.on('dragstart', () => {
       setIsTracking(false);
@@ -336,6 +358,9 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
     });
 
     return () => {
+      clearTimeout(initTimer1);
+      clearTimeout(initTimer2);
+      resizeObserver.disconnect();
       try {
         map.remove();
       } catch (e) {
@@ -353,12 +378,38 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
     if (centerMapTarget && mapInstanceRef.current) {
       setIsTracking(false);
       const map = mapInstanceRef.current;
+      const targetLatLng: [number, number] = [centerMapTarget.lat, centerMapTarget.lng];
+      const targetZoom = centerMapTarget.zoom || 18;
+
       map.invalidateSize();
-      map.flyTo(
-        [centerMapTarget.lat, centerMapTarget.lng],
-        centerMapTarget.zoom || 18,
-        { duration: 1.0 }
-      );
+      map.setView(targetLatLng, targetZoom, { animate: false });
+
+      const t1 = setTimeout(() => {
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.invalidateSize();
+          mapInstanceRef.current.setView(targetLatLng, targetZoom, { animate: false });
+        }
+      }, 80);
+
+      const t2 = setTimeout(() => {
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.invalidateSize();
+          mapInstanceRef.current.panTo(targetLatLng, { animate: true, duration: 0.3 });
+        }
+      }, 250);
+
+      const t3 = setTimeout(() => {
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.invalidateSize();
+          mapInstanceRef.current.setView(targetLatLng, targetZoom, { animate: false });
+        }
+      }, 500);
+
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+      };
     }
   }, [centerMapTarget]);
 
@@ -587,8 +638,8 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
       }
     });
 
-    // Auto-tracking camera centering
-    if (isTracking && selectedDrone) {
+    // Auto-tracking camera centering (only when tracking is enabled and no active pinned location)
+    if (isTracking && !centerMapTarget && selectedDrone) {
       map.panTo([selectedDrone.coordinates.lat, selectedDrone.coordinates.lng], {
         animate: true,
         duration: 0.5,
@@ -734,6 +785,7 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
   };
 
   const handleRecenterDrone = () => {
+    setCenterMapTarget(null);
     setIsTracking(true);
     if (mapInstanceRef.current && selectedDrone) {
       mapInstanceRef.current.setView(

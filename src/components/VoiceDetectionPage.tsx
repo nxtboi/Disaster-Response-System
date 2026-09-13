@@ -862,10 +862,13 @@ export function VoiceDetectionPage() {
               <button
                 id="voice-distress-view-map-btn"
                 onClick={() => {
+                  if (latestDistress.waypointId) {
+                    setSelectedWaypointId(latestDistress.waypointId);
+                  }
                   setCenterMapTarget({
                     lat: latestDistress.coordinates.lat,
                     lng: latestDistress.coordinates.lng,
-                    zoom: 17,
+                    zoom: 18,
                     timestamp: Date.now(),
                   });
                   setActiveView("Dashboard");

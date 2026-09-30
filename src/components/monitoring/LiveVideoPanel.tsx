@@ -118,7 +118,7 @@ export function LiveVideoPanel({
   const [zoom, setZoom] = useState<number>(1);
   const [visionFilter, setVisionFilter] = useState<"normal" | "nvg" | "mono" | "edge">("normal");
   const [showHud, setShowHud] = useState<boolean>(true);
-  const [showAiBoxes, setShowAiBoxes] = useState<boolean>(true);
+  const [showAiBoxes, setShowAiBoxes] = useState<boolean>(false);
   const [ptz, setPtz] = useState<{ pan: number; tilt: number }>({ pan: 0, tilt: 0 });
   const [isPtzOpen, setIsPtzOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(isMasterRecording);
@@ -226,7 +226,7 @@ export function LiveVideoPanel({
     }
   }, [webcamStream]);
 
-  // Poll real-time live frames from backend server if viewing another device / visitor
+  // Poll real-time live frames from backend server if viewing another device / visitor + BroadcastChannel
   useEffect(() => {
     if (activeSource.lensType !== "visitor-camera" || activeSource.isSelf) {
       setRemoteFrame(null);
@@ -236,6 +236,21 @@ export function LiveVideoPanel({
     let isMounted = true;
     let pollTimer: number | null = null;
     let isFetching = false;
+    let channel: BroadcastChannel | null = null;
+
+    try {
+      if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+        channel = new BroadcastChannel("drs_visitor_camera_network");
+        channel.onmessage = (event) => {
+          if (!isMounted) return;
+          const { type, id, frame } = event.data || {};
+          if (type === "VISITOR_FRAME" && id === activeSource.id && frame) {
+            setRemoteFrame(frame);
+            setRemoteFrameAge(0);
+          }
+        };
+      }
+    } catch {}
 
     const fetchLiveFrame = async () => {
       if (isFetching) return;
@@ -264,6 +279,11 @@ export function LiveVideoPanel({
     return () => {
       isMounted = false;
       if (pollTimer) clearInterval(pollTimer);
+      if (channel) {
+        try {
+          channel.close();
+        } catch {}
+      }
     };
   }, [activeSource.lensType, activeSource.id, activeSource.isSelf]);
 
@@ -809,18 +829,7 @@ export function LiveVideoPanel({
             {/* AI Bounding Boxes */}
             {showAiBoxes && activeSource.lensType !== "thermal-flir" && (
               <div className="absolute inset-0 pointer-events-none">
-                {/* Target 1: Human Ground Party */}
-                <div className="absolute top-[48%] left-[28%] w-16 h-24 border-2 border-emerald-400 rounded-sm">
-                  <div className="absolute -top-4 left-0 bg-emerald-950/90 text-emerald-300 text-[8px] font-mono font-bold px-1 rounded border border-emerald-500/50 flex items-center gap-1">
-                    <span>HUMAN #01</span>
-                    <span className="text-emerald-400">98%</span>
-                  </div>
-                  <div className="absolute -bottom-3 left-0 bg-black/80 text-[7px] font-mono text-zinc-300 px-1">
-                    DIST: 14.2m
-                  </div>
-                </div>
-
-                {/* Target 2: Vehicle */}
+                {/* Target: Vehicle */}
                 <div className="absolute top-[26%] left-[56%] w-28 h-18 border-2 border-cyan-400 rounded-sm">
                   <div className="absolute -top-4 left-0 bg-cyan-950/90 text-cyan-300 text-[8px] font-mono font-bold px-1 rounded border border-cyan-500/50 flex items-center gap-1">
                     <span>VEHICLE #04</span>

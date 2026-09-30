@@ -51,9 +51,10 @@ function AppContent() {
   const [currentPage, setCurrentPage] = useState<AppPage>(() => {
     const session = getStoredAuth();
     if (session?.lastPage && ["landing", "command_center", "explore_system", "admin_panel"].includes(session.lastPage)) {
-      return session.lastPage;
+      // If user had lastPage set to landing, launch command_center directly so the interactive map is seen immediately
+      return session.lastPage === "landing" ? "command_center" : session.lastPage;
     }
-    return "landing";
+    return "command_center";
   });
 
   // Ensure currentUser in store is synchronized on mount

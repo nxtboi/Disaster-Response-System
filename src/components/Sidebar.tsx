@@ -11,6 +11,7 @@ import { ConnectionStatus, Drone } from "../types";
 
 const NAV_ITEMS = [
   { id: "Dashboard", icon: LayoutDashboard, label: "Dashboard" },
+  { id: "Tactical Map", icon: MapIcon, label: "Live Tactical Map" },
   { id: "Live Monitoring", icon: Video, label: "Live Monitoring" },
   { id: "Voice Detection", icon: Mic, label: "Gnani.ai Voice AI" },
   { id: "Missions", icon: Target, label: "Autonomous Missions" },

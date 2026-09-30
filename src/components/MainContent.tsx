@@ -83,7 +83,8 @@ export function MainContent() {
         </div>
       )}
       
-      <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/80 via-transparent to-zinc-950/30 pointer-events-none z-[5]" />
+      {/* Subtle border vignette around edges without obscuring the live map */}
+      <div className="absolute inset-0 pointer-events-none z-[5] shadow-[inset_0_0_20px_rgba(0,0,0,0.4)]" />
     </main>
   );
 }

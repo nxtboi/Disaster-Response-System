@@ -589,6 +589,17 @@ export function ExploreSystemPage({
                         <td className="py-3.5 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             <button
+                              onClick={() => {
+                                setSelectedDroneId(drone.id);
+                                setActiveView("Dashboard");
+                                if (onLaunchCommandCenter) onLaunchCommandCenter();
+                              }}
+                              className="px-2 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded text-[11px] font-bold transition-colors"
+                              title="Locate drone on Free Tactical Map"
+                            >
+                              MAP
+                            </button>
+                            <button
                               onClick={() => handleOpenLiveMonitoring(drone.id)}
                               className="px-2 py-1 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 rounded text-[11px] font-bold transition-colors"
                               title="Open live camera & multi-sensor panel"
@@ -717,6 +728,18 @@ export function ExploreSystemPage({
                     >
                       <Video className="w-3.5 h-3.5" />
                       <span>VIEW LIVE</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedDroneId(drone.id);
+                        setActiveView("Dashboard");
+                        if (onLaunchCommandCenter) onLaunchCommandCenter();
+                      }}
+                      className="py-1.5 px-3 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-lg text-xs font-mono font-bold transition-colors flex items-center gap-1"
+                      title="Locate drone on Free Tactical Map"
+                    >
+                      <Navigation className="w-3.5 h-3.5" />
+                      <span>MAP</span>
                     </button>
                     <button
                       onClick={() => handleQuickCommand(drone, "Return to Home")}

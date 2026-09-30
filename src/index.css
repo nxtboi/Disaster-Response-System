@@ -58,3 +58,15 @@
 .drs-popup .leaflet-popup-content {
   margin: 4px 8px;
 }
+
+.leaflet-control-scale-line {
+  background: rgba(9, 9, 11, 0.85) !important;
+  color: #38bdf8 !important;
+  border: 1px solid rgba(56, 189, 248, 0.4) !important;
+  border-top: none !important;
+  font-family: monospace !important;
+  font-size: 10px !important;
+  padding: 1px 4px !important;
+  backdrop-filter: blur(6px);
+  border-radius: 0 0 4px 4px;
+}

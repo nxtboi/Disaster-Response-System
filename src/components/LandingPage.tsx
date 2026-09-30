@@ -78,24 +78,26 @@ export function LandingPage({
             One platform. Multiple drones. Real-time intelligence.
           </motion.p>
 
-          <motion.div variants={itemVariants} className="flex flex-col sm:flex-row gap-6">
+          <motion.div variants={itemVariants} className="flex flex-col sm:flex-row gap-4 items-center">
             <button
               onClick={onLaunch}
-              className="group relative px-8 py-4 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/50 hover:border-cyan-400 transition-all duration-300 rounded-sm overflow-hidden"
+              className="group relative px-8 py-4 bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold tracking-widest uppercase text-sm rounded-sm transition-all duration-300 shadow-[0_0_30px_rgba(6,182,212,0.4)] flex items-center gap-2.5"
             >
-              <div className="absolute inset-0 w-0 bg-cyan-500/10 transition-all duration-[250ms] ease-out group-hover:w-full"></div>
-              <span className="relative flex items-center gap-2 text-cyan-300 font-medium tracking-widest uppercase text-sm">
-                Launch Command Center
-              </span>
+              <Crosshair className="w-4 h-4 text-zinc-950" />
+              <span>Launch Live Map & Command Center</span>
             </button>
             <button
               onClick={onExploreSystem}
-              className="px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-cyan-500/40 text-zinc-300 hover:text-white transition-all duration-300 rounded-sm group flex items-center justify-center gap-2"
+              className="px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-cyan-500/40 text-zinc-300 hover:text-white transition-all duration-300 rounded-sm group flex items-center justify-center gap-2 font-medium tracking-widest uppercase text-sm"
             >
-              <span className="font-medium tracking-widest uppercase text-sm">
-                Explore System
-              </span>
+              <span>Explore Fleet</span>
             </button>
+          </motion.div>
+
+          <motion.div variants={itemVariants} className="mt-8 flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-950/90 border border-cyan-500/40 text-xs font-mono text-zinc-300 shadow-xl backdrop-blur-md">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-cyan-300 font-semibold">Free Online Map:</span>
+            <span>OpenStreetMap, CARTO Voyager & Esri Satellite HD</span>
           </motion.div>
         </motion.div>
       </div>

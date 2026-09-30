@@ -284,13 +284,16 @@ export function CameraRenderer({
     };
   }, [source.lensType, source.deviceId, source.id, source.isSelf, source.stream, facingMode]);
 
-  // Bind visitor stream to video if external stream is provided
+  // Bind visitor stream to video if external or local broadcast stream is provided
   useEffect(() => {
-    if (source.lensType === "visitor-camera" && source.stream && visitorVideoRef.current) {
-      visitorVideoRef.current.srcObject = source.stream;
-      visitorVideoRef.current.play().catch(() => {});
+    if (source.lensType === "visitor-camera") {
+      const targetStream = source.stream || (source.isSelf ? localBroadcastStream : null);
+      if (targetStream && visitorVideoRef.current) {
+        visitorVideoRef.current.srcObject = targetStream;
+        visitorVideoRef.current.play().catch(() => {});
+      }
     }
-  }, [source.lensType, source.stream]);
+  }, [source.lensType, source.stream, source.isSelf, localBroadcastStream]);
 
   // Poll real-time live frames from backend server if viewing another device + instant BroadcastChannel
   useEffect(() => {
@@ -352,9 +355,10 @@ export function CameraRenderer({
     };
   }, [source.lensType, source.id, source.isSelf]);
 
-  // High-fidelity procedural Tactical Visitor Bodycam / Helmet Cam Canvas simulation
+  // High-fidelity procedural Tactical Visitor Bodycam / Helmet Cam Canvas video stream simulation
   useEffect(() => {
-    if (source.lensType !== "visitor-camera" || (source.isSelf && mediaStreamRef.current)) return;
+    const hasActiveLiveStream = source.stream || (source.isSelf && localBroadcastStream);
+    if (source.lensType !== "visitor-camera" || hasActiveLiveStream) return;
 
     const canvas = visitorCanvasRef.current;
     if (!canvas) return;
@@ -363,83 +367,157 @@ export function CameraRenderer({
 
     let animId: number;
     let tick = 0;
+    const isThermalUnit = source.visitorId === "field-bravo" || visionMode === "thermal";
 
     // Load background image for texture
     const bgImg = new Image();
     bgImg.src = droneCameraFeed;
 
     const renderVisitorBodycam = () => {
-      tick += 0.03;
-      canvas.width = canvas.clientWidth || 480;
-      canvas.height = canvas.clientHeight || 320;
+      tick += 0.035;
+      canvas.width = canvas.clientWidth || 640;
+      canvas.height = canvas.clientHeight || 360;
 
       const w = canvas.width;
       const h = canvas.height;
 
-      // Bobbing walking/panning motion simulation
-      const bobX = Math.sin(tick * 1.5) * 6;
-      const bobY = Math.abs(Math.sin(tick * 3)) * 4;
+      // Bobbing walking/panning motion simulation (realistic field cadence)
+      const bobX = Math.sin(tick * 1.8) * 7;
+      const bobY = Math.abs(Math.sin(tick * 3.6)) * 5;
 
       ctx.save();
       ctx.clearRect(0, 0, w, h);
 
-      // Draw background scene with bodycam movement
-      if (bgImg.complete && bgImg.naturalWidth > 0) {
-        ctx.drawImage(bgImg, -15 + bobX, -15 + bobY, w + 30, h + 30);
-      } else {
-        ctx.fillStyle = "#0c0d12";
+      // 1. Draw background scene with bodycam movement
+      if (bgImg.complete && bgImg.naturalWidth > 0 && !isThermalUnit) {
+        ctx.drawImage(bgImg, -20 + bobX, -20 + bobY, w + 40, h + 40);
+        ctx.fillStyle = "rgba(0, 15, 20, 0.25)";
         ctx.fillRect(0, 0, w, h);
+      } else {
+        // Deep tactical nocturnal or thermal backdrop
+        const gradBg = ctx.createLinearGradient(0, 0, 0, h);
+        if (isThermalUnit) {
+          gradBg.addColorStop(0, "#08031d");
+          gradBg.addColorStop(0.5, "#13093c");
+          gradBg.addColorStop(1, "#260e4a");
+        } else {
+          gradBg.addColorStop(0, "#06090e");
+          gradBg.addColorStop(0.6, "#0b1219");
+          gradBg.addColorStop(1, "#080d12");
+        }
+        ctx.fillStyle = gradBg;
+        ctx.fillRect(0, 0, w, h);
+
+        // Moving terrain horizon and elevation contour ridges
+        const horizonY = h * 0.52 + Math.sin(tick * 0.9) * 8 + bobY * 0.4;
+        ctx.lineWidth = 1.2;
+
+        // Draw dynamic search & rescue terrain wireframe mesh
+        for (let i = 0; i < w; i += 32) {
+          ctx.strokeStyle = isThermalUnit ? "rgba(168, 85, 247, 0.18)" : "rgba(6, 182, 212, 0.18)";
+          ctx.beginPath();
+          ctx.moveTo(i + bobX * 0.5, horizonY);
+          ctx.lineTo(i + (i - w / 2) * 1.8, h);
+          ctx.stroke();
+        }
+
+        for (let y = horizonY; y < h; y += 18) {
+          ctx.strokeStyle = isThermalUnit ? "rgba(244, 63, 94, 0.22)" : "rgba(16, 185, 129, 0.22)";
+          ctx.beginPath();
+          ctx.moveTo(0, y + Math.sin(tick + y * 0.1) * 2);
+          ctx.lineTo(w, y + Math.sin(tick + y * 0.1) * 2);
+          ctx.stroke();
+        }
       }
 
-      // Tactical Bodycam Vignette & Lens Edge Distortion
-      const grad = ctx.createRadialGradient(w / 2, h / 2, h * 0.3, w / 2, h / 2, h * 0.75);
+      // 2. Thermal Heat Signatures (if FLIR thermal scout Sarah Vance)
+      if (isThermalUnit) {
+        // Heat signature 1 (Survivor)
+        const heat1X = w * 0.42 + bobX * 0.7;
+        const heat1Y = h * 0.46 + bobY * 0.7;
+        const heatGrad = ctx.createRadialGradient(heat1X, heat1Y, 4, heat1X, heat1Y, 45);
+        heatGrad.addColorStop(0, "#ffffff");
+        heatGrad.addColorStop(0.25, "#ffea00");
+        heatGrad.addColorStop(0.55, "#ff3b00");
+        heatGrad.addColorStop(0.85, "rgba(147, 51, 234, 0.4)");
+        heatGrad.addColorStop(1, "rgba(147, 51, 234, 0)");
+        ctx.fillStyle = heatGrad;
+        ctx.beginPath();
+        ctx.arc(heat1X, heat1Y, 45, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Heat signature 2 (Rescue Vehicle / Power Generator)
+        const heat2X = w * 0.72 + bobX * 0.4;
+        const heat2Y = h * 0.38 + bobY * 0.4;
+        const heat2Grad = ctx.createRadialGradient(heat2X, heat2Y, 2, heat2X, heat2Y, 30);
+        heat2Grad.addColorStop(0, "#ffffff");
+        heat2Grad.addColorStop(0.3, "#f97316");
+        heat2Grad.addColorStop(0.7, "rgba(236, 72, 153, 0.4)");
+        heat2Grad.addColorStop(1, "rgba(0, 0, 0, 0)");
+        ctx.fillStyle = heat2Grad;
+        ctx.beginPath();
+        ctx.arc(heat2X, heat2Y, 30, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 3. Tactical Vignette & Edge Shadow
+      const grad = ctx.createRadialGradient(w / 2, h / 2, h * 0.35, w / 2, h / 2, h * 0.8);
       grad.addColorStop(0, "rgba(0,0,0,0)");
-      grad.addColorStop(1, "rgba(0,0,0,0.55)");
+      grad.addColorStop(1, "rgba(0,0,0,0.65)");
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, w, h);
 
-      // Optical horizon line & subtle gyro pitch indicator
-      ctx.strokeStyle = "rgba(6, 182, 212, 0.3)";
+      // 4. Optical horizon line & subtle gyro pitch indicator
+      ctx.strokeStyle = isThermalUnit ? "rgba(244, 114, 182, 0.5)" : "rgba(6, 182, 212, 0.4)";
       ctx.lineWidth = 1;
       ctx.beginPath();
-      const horizonY = h * 0.52 + Math.sin(tick * 0.8) * 3;
-      ctx.moveTo(w * 0.2, horizonY);
+      const horizonY = h * 0.5 + Math.sin(tick * 0.8) * 3;
+      ctx.moveTo(w * 0.22, horizonY);
       ctx.lineTo(w * 0.38, horizonY);
       ctx.moveTo(w * 0.62, horizonY);
-      ctx.lineTo(w * 0.8, horizonY);
+      ctx.lineTo(w * 0.78, horizonY);
       ctx.stroke();
 
       // Optical center cross
-      ctx.strokeStyle = "rgba(6, 182, 212, 0.4)";
+      ctx.strokeStyle = isThermalUnit ? "rgba(251, 191, 36, 0.6)" : "rgba(16, 185, 129, 0.6)";
       ctx.beginPath();
-      ctx.arc(w / 2 + bobX * 0.5, h / 2 + bobY * 0.5, 6, 0, Math.PI * 2);
+      ctx.arc(w / 2 + bobX * 0.5, h / 2 + bobY * 0.5, 7, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Survivor / Team recognition bounding boxes
+      // 5. Dynamic scanlines for realistic live monitor texture
+      ctx.fillStyle = "rgba(0, 0, 0, 0.08)";
+      for (let y = 0; y < h; y += 4) {
+        ctx.fillRect(0, y, w, 1.5);
+      }
+
+      // 6. AI Detection Bounding Boxes
       if (showAiBoxes) {
-        // AI detection box 1: Field Unit
-        const box1X = w * 0.35 + bobX * 0.8;
-        const box1Y = h * 0.42 + bobY * 0.8;
-        ctx.strokeStyle = "#10b981";
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(box1X, box1Y, 70, 95);
-
-        ctx.fillStyle = "rgba(6, 78, 59, 0.85)";
-        ctx.fillRect(box1X, box1Y - 14, 70, 14);
-        ctx.fillStyle = "#6ee7b7";
-        ctx.font = "bold 9px monospace";
-        ctx.fillText("TEAM #02 [97%]", box1X + 3, box1Y - 4);
-
-        // AI detection box 2: Sector Recon Beacon
+        // AI detection box: Sector Recon Beacon
         const box2X = w * 0.68 + bobX * 0.4;
         const box2Y = h * 0.32 + bobY * 0.4;
-        ctx.strokeStyle = "#f59e0b";
-        ctx.strokeRect(box2X, box2Y, 50, 45);
+        ctx.strokeStyle = "#38bdf8";
+        ctx.strokeRect(box2X, box2Y, 52, 48);
 
-        ctx.fillStyle = "rgba(120, 53, 15, 0.85)";
-        ctx.fillRect(box2X, box2Y - 14, 50, 14);
-        ctx.fillStyle = "#fde68a";
-        ctx.fillText("BEACON [92%]", box2X + 3, box2Y - 4);
+        ctx.fillStyle = "rgba(12, 74, 110, 0.85)";
+        ctx.fillRect(box2X, box2Y - 15, 52, 15);
+        ctx.fillStyle = "#bae6fd";
+        ctx.font = "bold 9px monospace";
+        ctx.fillText("BEACON [94%]", box2X + 3, box2Y - 4);
+      }
+
+      // 7. Tactical telemetry HUD burned into bodycam stream
+      const now = new Date();
+      const timeStr = now.toISOString().slice(11, 23);
+      ctx.fillStyle = isThermalUnit ? "rgba(251, 146, 60, 0.9)" : "rgba(6, 182, 212, 0.9)";
+      ctx.font = "9px monospace";
+      ctx.fillText(`UTC ${timeStr} • ISO 640 • 1/120s • HDG 248° WSW`, 12, h - 12);
+
+      // Audio waveform VU simulation (live microphone channel)
+      const micBars = 6;
+      for (let m = 0; m < micBars; m++) {
+        const barH = 3 + Math.abs(Math.sin(tick * 5 + m * 0.8)) * 10;
+        ctx.fillStyle = m > 4 ? "#f43f5e" : "#10b981";
+        ctx.fillRect(w - 70 + m * 5, h - 12 - barH, 3.5, barH);
       }
 
       ctx.restore();
@@ -451,7 +529,7 @@ export function CameraRenderer({
     return () => {
       cancelAnimationFrame(animId);
     };
-  }, [source.lensType, source.id, source.isSelf, showAiBoxes]);
+  }, [source.lensType, source.id, source.isSelf, source.stream, localBroadcastStream, showAiBoxes, visionMode]);
 
   // Animated procedural Canvas for LiDAR Depth or Thermal / Downward feeds
   useEffect(() => {
@@ -570,11 +648,19 @@ export function CameraRenderer({
 
   // 2. Visitor & Remote Field Unit Camera
   if (source.lensType === "visitor-camera") {
+    const streamToDisplay = source.stream || (source.isSelf ? localBroadcastStream : null);
+
     return (
       <div className="w-full h-full relative overflow-hidden bg-black flex items-center justify-center">
-        {source.stream ? (
+        {streamToDisplay ? (
           <video
-            ref={visitorVideoRef}
+            ref={(el) => {
+              visitorVideoRef.current = el;
+              if (el && el.srcObject !== streamToDisplay) {
+                el.srcObject = streamToDisplay;
+                el.play().catch(() => {});
+              }
+            }}
             autoPlay
             playsInline
             muted
@@ -583,7 +669,14 @@ export function CameraRenderer({
           />
         ) : source.isSelf && !cameraError ? (
           <video
-            ref={videoRef}
+            ref={(el) => {
+              videoRef.current = el;
+              const stream = mediaStreamRef.current || localBroadcastStream;
+              if (el && stream && el.srcObject !== stream) {
+                el.srcObject = stream;
+                el.play().catch(() => {});
+              }
+            }}
             autoPlay
             playsInline
             muted
@@ -621,9 +714,21 @@ export function CameraRenderer({
             <span className="font-bold text-white tracking-wide truncate max-w-[180px]">
               {source.visitorName || source.label}
             </span>
-            {(source.isRoot || source.isSelf) && (
+            {(source.isRoot || source.isSelf) ? (
               <span className="text-[8px] font-extrabold px-1 py-0.2 bg-emerald-500/30 text-emerald-300 rounded border border-emerald-400">
-                ROOT
+                ROOT (YOU)
+              </span>
+            ) : streamToDisplay ? (
+              <span className="text-[8px] font-extrabold px-1 py-0.2 bg-emerald-500/30 text-emerald-300 rounded border border-emerald-400 animate-pulse">
+                LIVE WEBRTC
+              </span>
+            ) : remoteFrame ? (
+              <span className="text-[8px] font-extrabold px-1 py-0.2 bg-emerald-500/30 text-emerald-300 rounded border border-emerald-400 animate-pulse">
+                LIVE P2P RELAY
+              </span>
+            ) : (
+              <span className="text-[8px] font-mono px-1 py-0.2 bg-cyan-500/20 text-cyan-300 rounded border border-cyan-500/40">
+                SAR MESH FEED
               </span>
             )}
           </div>
@@ -850,17 +955,10 @@ export function CameraRenderer({
           {/* AI Bounding Boxes */}
           {showAiBoxes && (
             <div className="absolute inset-0 pointer-events-none">
-              {/* Target 1: Vehicle */}
+              {/* Target: Vehicle */}
               <div className="absolute top-[28%] left-[45%] w-24 h-16 border-2 border-emerald-400 rounded-sm">
                 <div className="absolute -top-4 left-0 bg-emerald-950/90 text-emerald-300 text-[8px] font-mono font-bold px-1 rounded border border-emerald-500/50">
                   VEHICLE [98%]
-                </div>
-              </div>
-
-              {/* Target 2: Personnel */}
-              <div className="absolute top-[52%] left-[22%] w-14 h-20 border-2 border-amber-400 rounded-sm">
-                <div className="absolute -top-4 left-0 bg-amber-950/90 text-amber-300 text-[8px] font-mono font-bold px-1 rounded border border-amber-500/50">
-                  HUMAN #04 [94%]
                 </div>
               </div>
             </div>

@@ -439,13 +439,20 @@ export function useVisitorCameras(currentUsername: string = "Operator") {
 
   // Frame Capture and Server Streaming Loop
   const startFrameStreaming = useCallback((stream: MediaStream, selfId: string, broadcasterName: string) => {
-    // Create hidden video element if needed
+    // Create offscreen video element if needed (NOT display:none, so browser keeps decoding frames)
     if (!hiddenVideoRef.current) {
       const video = document.createElement("video");
       video.autoplay = true;
       video.muted = true;
       video.playsInline = true;
-      video.style.display = "none";
+      video.style.position = "fixed";
+      video.style.top = "-9999px";
+      video.style.left = "-9999px";
+      video.style.width = "320px";
+      video.style.height = "240px";
+      video.style.opacity = "0.001";
+      video.style.pointerEvents = "none";
+      video.style.zIndex = "-9999";
       document.body.appendChild(video);
       hiddenVideoRef.current = video;
     }
@@ -460,6 +467,9 @@ export function useVisitorCameras(currentUsername: string = "Operator") {
     const video = hiddenVideoRef.current;
     const canvas = hiddenCanvasRef.current;
     video.srcObject = stream;
+    video.onloadedmetadata = () => {
+      video.play().catch(() => {});
+    };
     video.play().catch(() => {});
 
     // Clear any previous interval
@@ -471,9 +481,10 @@ export function useVisitorCameras(currentUsername: string = "Operator") {
 
     // Send compressed frame every 90ms (~11 FPS)
     frameCaptureIntervalRef.current = window.setInterval(async () => {
-      if (!isBroadcastingRef.current || !video || video.readyState < 2 || !canvas) return;
+      if (!isBroadcastingRef.current || !video || !canvas) return;
+      // Ensure video is actively playing frames
+      if (video.readyState < 2 && video.videoWidth === 0) return;
       if (isSending) return; // Prevent network backlog
-
       try {
         isSending = true;
         const ctx = canvas.getContext("2d", { alpha: false });
@@ -567,6 +578,7 @@ export function useVisitorCameras(currentUsername: string = "Operator") {
       }
 
       setLocalStream(stream);
+      isBroadcastingRef.current = true;
       setIsBroadcasting(true);
       if (requestedFacingMode) setFacingMode(requestedFacingMode);
 
@@ -654,6 +666,7 @@ export function useVisitorCameras(currentUsername: string = "Operator") {
   }, [facingMode, localStream, currentUsername, startFrameStreaming]);
 
   const stopBroadcasting = useCallback(() => {
+    isBroadcastingRef.current = false;
     setIsBroadcasting(false);
     stopFrameStreaming();
 

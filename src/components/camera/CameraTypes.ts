@@ -51,6 +51,7 @@ export interface WindowSlotConfig {
   isPtzOpen: boolean;
   ptz: { pan: number; tilt: number };
   isMuted: boolean;
+  isAutoFraming?: boolean;
 }
 
 // Built-in fixed / auxiliary cameras (e.g. Ground Station Dock, Security Mast, User Device)

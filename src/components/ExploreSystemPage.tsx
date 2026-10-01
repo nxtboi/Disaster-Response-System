@@ -595,7 +595,7 @@ export function ExploreSystemPage({
                                 if (onLaunchCommandCenter) onLaunchCommandCenter();
                               }}
                               className="px-2 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded text-[11px] font-bold transition-colors"
-                              title="Locate drone on Free Tactical Map"
+                              title="Locate drone on Command Center"
                             >
                               MAP
                             </button>
@@ -736,7 +736,7 @@ export function ExploreSystemPage({
                         if (onLaunchCommandCenter) onLaunchCommandCenter();
                       }}
                       className="py-1.5 px-3 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-lg text-xs font-mono font-bold transition-colors flex items-center gap-1"
-                      title="Locate drone on Free Tactical Map"
+                      title="Locate drone on Command Center"
                     >
                       <Navigation className="w-3.5 h-3.5" />
                       <span>MAP</span>

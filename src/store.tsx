@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
 import { Drone, DroneCoordinates, TacticalWaypoint, WaypointAction } from "./types";
 import { MOCK_DRONES } from "./data";
 
@@ -12,6 +12,27 @@ export interface UserLocation {
 export interface UserAccount {
   username: string;
   role: "admin" | "operator";
+}
+
+export interface SerialLogEntry {
+  time: string;
+  msg: string;
+  isError?: boolean;
+}
+
+export interface SerialTelemetryPacket {
+  id?: string;
+  lat?: number;
+  lng?: number;
+  alt?: number;
+  spd?: number;
+  bat?: number;
+  hdg?: number;
+  sat?: number;
+  vspd?: number;
+  flightMode?: string;
+  raw?: string;
+  timestamp: number;
 }
 
 interface DRSContextType {
@@ -55,6 +76,25 @@ interface DRSContextType {
   addDrone: (customData?: Partial<Drone>) => Drone;
   removeDrone: (id: string) => void;
   addAlert: (droneId: string, message: string) => void;
+  // Hardware Serial Link
+  serialConnected: boolean;
+  serialBaudRate: number;
+  setSerialBaudRate: (baud: number) => void;
+  serialRxCount: number;
+  lastSerialPacket: SerialTelemetryPacket | null;
+  serialLogs: SerialLogEntry[];
+  addSerialLog: (msg: string, isError?: boolean) => void;
+  clearSerialLogs: () => void;
+  connectSerial: (baud?: number) => Promise<{ success: boolean; error?: string }>;
+  disconnectSerial: () => Promise<void>;
+  simulateSerialPacket: () => void;
+  parseAndApplyTelemetry: (dataString: string) => void;
+  // WebSocket Hardware Link
+  wsConnected: boolean;
+  wsUrl: string;
+  setWsUrl: (url: string) => void;
+  connectWs: () => void;
+  disconnectWs: () => void;
 }
 
 const DEFAULT_WAYPOINTS: TacticalWaypoint[] = [
@@ -163,6 +203,279 @@ export function DRSProvider({ children }: { children: ReactNode }) {
   const [isStatusPanelVisible, setIsStatusPanelVisible] = useState(true);
 
   const toggleStatusPanel = () => setIsStatusPanelVisible((prev) => !prev);
+
+  // Hardware Serial Connection State
+  const [serialConnected, setSerialConnected] = useState(false);
+  const [serialBaudRate, setSerialBaudRate] = useState<number>(256000);
+  const [serialRxCount, setSerialRxCount] = useState<number>(0);
+  const [lastSerialPacket, setLastSerialPacket] = useState<SerialTelemetryPacket | null>(null);
+  const [serialLogs, setSerialLogs] = useState<SerialLogEntry[]>([]);
+  const portRef = useRef<any>(null);
+  const readerRef = useRef<any>(null);
+  const isReadingRef = useRef(false);
+
+  // WebSocket Hardware Link
+  const [wsConnected, setWsConnected] = useState(false);
+  const [wsUrl, setWsUrl] = useState("ws://192.168.1.100:81");
+  const wsRef = useRef<WebSocket | null>(null);
+
+  const addSerialLog = (msg: string, isError = false) => {
+    setSerialLogs((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg, isError }].slice(-60));
+  };
+
+  const clearSerialLogs = () => {
+    setSerialLogs([]);
+  };
+
+  const parseAndApplyTelemetry = (dataString: string) => {
+    try {
+      let parsedObj: any = null;
+      const trimmed = dataString.trim();
+      if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+        parsedObj = JSON.parse(trimmed);
+      } else if (trimmed.includes(":") || trimmed.includes(",")) {
+        // Parse key-value telemetry (e.g., ALT:120, SPD:35, BAT:94, HDG:128)
+        const parts = trimmed.split(/[,;\s]+/);
+        const kvObj: any = {};
+        for (const part of parts) {
+          const [k, v] = part.split(/[:=]/);
+          if (k && v !== undefined) {
+            const key = k.trim().toLowerCase();
+            const val = v.trim();
+            const num = parseFloat(val);
+            if (!isNaN(num)) {
+              if (key === "alt" || key === "altitude") kvObj.alt = num;
+              else if (key === "spd" || key === "speed") kvObj.spd = num;
+              else if (key === "bat" || key === "battery") kvObj.bat = num;
+              else if (key === "hdg" || key === "heading") kvObj.hdg = num;
+              else if (key === "lat") kvObj.lat = num;
+              else if (key === "lng" || key === "lon") kvObj.lng = num;
+              else if (key === "sat" || key === "satellites") kvObj.sat = num;
+              else if (key === "vspd") kvObj.vspd = num;
+            } else {
+              if (key === "id") kvObj.id = val;
+              else if (key === "mode") kvObj.flightMode = val;
+            }
+          }
+        }
+        if (Object.keys(kvObj).length > 0) {
+          parsedObj = kvObj;
+        }
+      }
+
+      if (parsedObj && typeof parsedObj === "object") {
+        const targetId = parsedObj.id || selectedDroneId || "DRN-01";
+        const packet: SerialTelemetryPacket = {
+          id: targetId,
+          lat: parsedObj.lat,
+          lng: parsedObj.lng,
+          alt: parsedObj.alt,
+          spd: parsedObj.spd,
+          bat: parsedObj.bat,
+          hdg: parsedObj.hdg,
+          sat: parsedObj.sat,
+          vspd: parsedObj.vspd,
+          flightMode: parsedObj.flightMode || parsedObj.mode,
+          raw: dataString,
+          timestamp: Date.now(),
+        };
+
+        setLastSerialPacket(packet);
+        setSerialRxCount((c) => c + 1);
+
+        setDrones((prevDrones) =>
+          prevDrones.map((d) => {
+            if (d.id !== targetId) return d;
+
+            const newCoords =
+              parsedObj.lat !== undefined && parsedObj.lng !== undefined
+                ? { lat: Number(parsedObj.lat), lng: Number(parsedObj.lng) }
+                : d.coordinates;
+
+            const newTelemetry = {
+              ...d.telemetry,
+              altitude: parsedObj.alt !== undefined ? Number(parsedObj.alt) : d.telemetry.altitude,
+              speed: parsedObj.spd !== undefined ? Number(parsedObj.spd) : d.telemetry.speed,
+              heading: parsedObj.hdg !== undefined ? Number(parsedObj.hdg) : d.telemetry.heading,
+              satelliteCount: parsedObj.sat !== undefined ? Number(parsedObj.sat) : d.telemetry.satelliteCount,
+              verticalSpeed: parsedObj.vspd !== undefined ? Number(parsedObj.vspd) : d.telemetry.verticalSpeed,
+            };
+
+            const newBattery = parsedObj.bat !== undefined ? Math.min(100, Math.max(0, Number(parsedObj.bat))) : d.battery;
+            const newFlightMode = parsedObj.flightMode || parsedObj.mode || d.flightMode;
+
+            return {
+              ...d,
+              status: "Online",
+              isHardwareLinked: true,
+              coordinates: newCoords,
+              battery: newBattery,
+              flightMode: newFlightMode as any,
+              telemetry: newTelemetry,
+              path: parsedObj.lat !== undefined ? [...d.path.slice(-100), newCoords] : d.path,
+            };
+          })
+        );
+      }
+    } catch {
+      // Ignore incomplete frames
+    }
+  };
+
+  const connectSerial = async (selectedBaud?: number): Promise<{ success: boolean; error?: string }> => {
+    if (!("serial" in navigator)) {
+      const err = "Web Serial API is not supported in this browser. Please use Chrome/Edge or open the app in a new tab.";
+      addSerialLog(err, true);
+      return { success: false, error: err };
+    }
+
+    const baud = selectedBaud || serialBaudRate;
+
+    try {
+      // @ts-ignore
+      const port = await navigator.serial.requestPort();
+      await port.open({ baudRate: baud });
+      portRef.current = port;
+      setSerialConnected(true);
+      setSerialBaudRate(baud);
+      addSerialLog(`Serial port opened successfully at ${baud.toLocaleString()} baud.`);
+
+      const decoder = new TextDecoderStream();
+      port.readable.pipeTo(decoder.writable).catch(() => {});
+      const reader = decoder.readable.getReader();
+      readerRef.current = reader;
+      isReadingRef.current = true;
+
+      // Background read loop
+      (async () => {
+        let buffer = "";
+        try {
+          while (isReadingRef.current) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            if (value) {
+              buffer += value;
+              const lines = buffer.split("\n");
+              buffer = lines.pop() || "";
+              for (const line of lines) {
+                const trimmed = line.trim();
+                if (trimmed) {
+                  addSerialLog(`USB RX: ${trimmed}`);
+                  parseAndApplyTelemetry(trimmed);
+                }
+              }
+            }
+          }
+        } catch (readErr: any) {
+          if (isReadingRef.current) {
+            addSerialLog(`USB read error: ${readErr?.message || readErr}`, true);
+          }
+        }
+      })();
+
+      return { success: true };
+    } catch (err: any) {
+      let msg = err?.message || "Failed to open serial port.";
+      if (err?.name === "SecurityError" || msg.includes("permissions policy") || msg.includes("disallowed")) {
+        msg = "Browser permissions policy blocked Web Serial in this preview frame. Please open the app in a new browser tab to access USB hardware.";
+      }
+      addSerialLog(`Serial error: ${msg}`, true);
+      setSerialConnected(false);
+      return { success: false, error: msg };
+    }
+  };
+
+  const disconnectSerial = async () => {
+    isReadingRef.current = false;
+    try {
+      if (readerRef.current) {
+        await readerRef.current.cancel().catch(() => {});
+        readerRef.current = null;
+      }
+      if (portRef.current) {
+        await portRef.current.close().catch(() => {});
+        portRef.current = null;
+      }
+      setSerialConnected(false);
+      addSerialLog("Serial port closed.");
+    } catch (err: any) {
+      addSerialLog(`Error closing serial port: ${err?.message || err}`, true);
+      setSerialConnected(false);
+    }
+  };
+
+  const simulateSerialPacket = () => {
+    const targetId = selectedDroneId || "DRN-01";
+    const baseDrone = drones.find((d) => d.id === targetId) || drones[0];
+    const jitter = () => (Math.random() - 0.5) * 0.0006;
+    const simLat = Number((baseDrone.coordinates.lat + jitter()).toFixed(6));
+    const simLng = Number((baseDrone.coordinates.lng + jitter()).toFixed(6));
+    const simAlt = Math.round(90 + Math.random() * 40);
+    const simSpd = Math.round(25 + Math.random() * 20);
+    const simBat = Math.max(15, baseDrone.battery - Math.floor(Math.random() * 2));
+    const simHdg = (baseDrone.telemetry.heading + Math.floor((Math.random() - 0.5) * 10) + 360) % 360;
+
+    const simJson = JSON.stringify({
+      id: targetId,
+      lat: simLat,
+      lng: simLng,
+      alt: simAlt,
+      spd: simSpd,
+      bat: simBat,
+      hdg: simHdg,
+    });
+
+    addSerialLog(`USB RX (SIM): ${simJson}`);
+    parseAndApplyTelemetry(simJson);
+  };
+
+  const connectWs = () => {
+    try {
+      const ws = new WebSocket(wsUrl);
+      ws.onopen = () => {
+        setWsConnected(true);
+        addSerialLog(`Connected to WebSocket: ${wsUrl}`);
+      };
+      ws.onmessage = (event) => {
+        addSerialLog(`WS RX: ${event.data}`);
+        parseAndApplyTelemetry(event.data);
+      };
+      ws.onerror = () => {
+        addSerialLog(`WebSocket Error. Ensure the ESP32 is on the same network.`, true);
+      };
+      ws.onclose = () => {
+        setWsConnected(false);
+        addSerialLog(`WebSocket connection closed.`);
+      };
+      wsRef.current = ws;
+    } catch (err: any) {
+      addSerialLog(`WS Init Error: ${err?.message || err}`, true);
+    }
+  };
+
+  const disconnectWs = () => {
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    setWsConnected(false);
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isReadingRef.current = false;
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+      if (readerRef.current) {
+        readerRef.current.cancel().catch(() => {});
+      }
+      if (portRef.current) {
+        portRef.current.close().catch(() => {});
+      }
+    };
+  }, []);
 
   // Tactical Waypoints State - Persisted per user account
   const [waypoints, setWaypoints] = useState<TacticalWaypoint[]>(() => {
@@ -657,6 +970,23 @@ export function DRSProvider({ children }: { children: ReactNode }) {
         addDrone,
         removeDrone,
         addAlert,
+        serialConnected,
+        serialBaudRate,
+        setSerialBaudRate,
+        serialRxCount,
+        lastSerialPacket,
+        serialLogs,
+        addSerialLog,
+        clearSerialLogs,
+        connectSerial,
+        disconnectSerial,
+        simulateSerialPacket,
+        parseAndApplyTelemetry,
+        wsConnected,
+        wsUrl,
+        setWsUrl,
+        connectWs,
+        disconnectWs,
       }}
     >
       {children}

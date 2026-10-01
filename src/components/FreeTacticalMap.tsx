@@ -32,9 +32,9 @@ interface FreeTacticalMapProps {
 }
 
 export type TileStyle =
+  | 'satellite_hybrid'
   | 'voyager'
   | 'osm'
-  | 'satellite_hybrid'
   | 'satellite'
   | 'cyclosm'
   | 'esri_street'
@@ -57,6 +57,16 @@ interface TileConfig {
 }
 
 export const FREE_TILE_SERVERS: Record<TileStyle, TileConfig> = {
+  satellite_hybrid: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    overlayUrl: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri, Maxar, Earthstar Geographics',
+    maxZoom: 19,
+    label: 'Satellite Hybrid HD (Default)',
+    subtext: 'Esri Satellite + Roads & City Names',
+    category: 'Satellite',
+    icon: '🌐',
+  },
   voyager: {
     url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
     attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
@@ -66,16 +76,6 @@ export const FREE_TILE_SERVERS: Record<TileStyle, TileConfig> = {
     category: 'Streets',
     subdomains: 'abcd',
     icon: '🗺️',
-  },
-  satellite_hybrid: {
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    overlayUrl: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-    attribution: 'Tiles &copy; Esri, Maxar, Earthstar Geographics',
-    maxZoom: 19,
-    label: 'Satellite Hybrid HD',
-    subtext: 'Esri Satellite + Roads & City Names',
-    category: 'Satellite',
-    icon: '🌐',
   },
   satellite: {
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -219,11 +219,23 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
   const userAccuracyCircleRef = useRef<L.Circle | null>(null);
   const searchPinMarkerRef = useRef<L.Marker | null>(null);
 
-  // Default to vivid CARTO Voyager (OpenStreetMap) so user immediately sees full-color streets & landmarks
-  const [tileStyle, setTileStyle] = useState<TileStyle>('voyager');
+  // Default to Esri Satellite Hybrid HD (Satellite imagery + street names & borders)
+  const [tileStyle, setTileStyle] = useState<TileStyle>(() => {
+    try {
+      const saved = localStorage.getItem('drs_map_tile_style');
+      if (saved && saved in FREE_TILE_SERVERS) return saved as TileStyle;
+    } catch (_) {}
+    return 'satellite_hybrid';
+  });
+
+  // Persist tile style choice to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('drs_map_tile_style', tileStyle);
+    } catch (_) {}
+  }, [tileStyle]);
+
   const [isTracking, setIsTracking] = useState(() => !centerMapTarget);
-  const [showLayerMenu, setShowLayerMenu] = useState(false);
-  const [layerCategory, setLayerCategory] = useState<string>('All');
   const [showReticle, setShowReticle] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -274,7 +286,7 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
       overlayLayerRef.current = null;
     }
 
-    const config = FREE_TILE_SERVERS[styleKey] || FREE_TILE_SERVERS.voyager;
+    const config = FREE_TILE_SERVERS[styleKey] || FREE_TILE_SERVERS.satellite_hybrid;
 
     const baseTile = L.tileLayer(config.url, {
       attribution: config.attribution,
@@ -337,7 +349,7 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
     // Scale control (metric + imperial) for tactical distance estimation
     L.control.scale({ position: 'bottomleft', imperial: true, metric: true }).addTo(map);
 
-    // Initial tile layer (CARTO Voyager OpenStreetMap)
+    // Initial tile layer (Default: Esri Satellite Hybrid HD)
     applyTileLayer(tileStyle, map);
 
     mapInstanceRef.current = map;
@@ -928,22 +940,8 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
         </div>
       )}
 
-      {/* Top Left: Free Map Engine Badge & Search Bar */}
+      {/* Top Left: Location Search & Preset Jump Chips */}
       <div className="absolute top-3 left-3 z-[400] flex flex-col gap-2 max-w-sm sm:max-w-md pointer-events-auto">
-        {/* Free Map Branding Banner */}
-        <div className="bg-zinc-950/90 backdrop-blur-md border border-cyan-500/40 px-3 py-1.5 rounded-lg shadow-2xl flex items-center justify-between gap-3 text-xs font-mono">
-          <div className="flex items-center gap-2">
-            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]"></div>
-            <span className="text-zinc-100 font-bold tracking-wider">FREE ONLINE MAP</span>
-            <span className="text-[10px] text-cyan-300 bg-cyan-950/80 px-1.5 py-0.5 rounded border border-cyan-500/30">
-              OpenStreetMap & Esri GIS
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5 text-[10px] text-zinc-400">
-            <span>No API Key Required</span>
-          </div>
-        </div>
-
         {/* Global Location Search Input (Nominatim OpenStreetMap) */}
         <div className="relative">
           <form
@@ -1143,184 +1141,8 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
         </div>
       )}
 
-      {/* Top Right: Free Map Layer Switcher Toolbar */}
+      {/* Top Right: Tactical HUD Controls */}
       <div className="absolute top-3 right-3 z-[400] flex items-center gap-2 pointer-events-auto">
-        {/* Quick Preset Selector Buttons (Streets, Satellite, Hybrid, Topo, Emergency, Dark) */}
-        <div className="hidden lg:flex items-center bg-zinc-950/90 backdrop-blur-md border border-zinc-700/80 rounded-xl p-1 shadow-2xl gap-1">
-          <button
-            onClick={() => setTileStyle('voyager')}
-            className={`px-2.5 py-1.5 rounded-lg text-xs font-mono flex items-center gap-1.5 transition-all ${
-              tileStyle === 'voyager'
-                ? 'bg-cyan-500 text-black font-bold shadow-md'
-                : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
-            }`}
-            title="OpenStreetMap Voyager (Vivid Streets & Landmarks)"
-          >
-            <span>🗺️</span>
-            <span>Voyager</span>
-          </button>
-          <button
-            onClick={() => setTileStyle('osm')}
-            className={`px-2.5 py-1.5 rounded-lg text-xs font-mono flex items-center gap-1.5 transition-all ${
-              tileStyle === 'osm'
-                ? 'bg-cyan-500 text-black font-bold shadow-md'
-                : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
-            }`}
-            title="OpenStreetMap Standard (Community Cartography)"
-          >
-            <span>📍</span>
-            <span>OSM</span>
-          </button>
-          <button
-            onClick={() => setTileStyle('satellite_hybrid')}
-            className={`px-2.5 py-1.5 rounded-lg text-xs font-mono flex items-center gap-1.5 transition-all ${
-              tileStyle === 'satellite_hybrid'
-                ? 'bg-cyan-500 text-black font-bold shadow-md'
-                : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
-            }`}
-            title="Esri Satellite with Highway & Place Labels"
-          >
-            <span>🌐</span>
-            <span>Hybrid</span>
-          </button>
-          <button
-            onClick={() => setTileStyle('satellite')}
-            className={`px-2.5 py-1.5 rounded-lg text-xs font-mono flex items-center gap-1.5 transition-all ${
-              tileStyle === 'satellite'
-                ? 'bg-cyan-500 text-black font-bold shadow-md'
-                : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
-            }`}
-            title="Pure High-Resolution Satellite Imagery"
-          >
-            <span>🛰️</span>
-            <span>Satellite</span>
-          </button>
-          <button
-            onClick={() => setTileStyle('topo')}
-            className={`px-2.5 py-1.5 rounded-lg text-xs font-mono flex items-center gap-1.5 transition-all ${
-              tileStyle === 'topo'
-                ? 'bg-cyan-500 text-black font-bold shadow-md'
-                : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
-            }`}
-            title="Esri Topographic Contour Relief"
-          >
-            <span>⛰️</span>
-            <span>Topo</span>
-          </button>
-          <button
-            onClick={() => setTileStyle('hot')}
-            className={`px-2.5 py-1.5 rounded-lg text-xs font-mono flex items-center gap-1.5 transition-all ${
-              tileStyle === 'hot'
-                ? 'bg-rose-500 text-white font-bold shadow-md'
-                : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
-            }`}
-            title="Humanitarian OpenStreetMap (Disaster Relief)"
-          >
-            <span>🚨</span>
-            <span>Rescue</span>
-          </button>
-          <button
-            onClick={() => setTileStyle('dark')}
-            className={`px-2.5 py-1.5 rounded-lg text-xs font-mono flex items-center gap-1.5 transition-all ${
-              tileStyle === 'dark'
-                ? 'bg-cyan-500 text-black font-bold shadow-md'
-                : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
-            }`}
-            title="Tactical Dark Matter (Night Vision)"
-          >
-            <span>🕶️</span>
-            <span>Dark</span>
-          </button>
-        </div>
-
-        {/* All Free Map Layers Dropdown Button */}
-        <div className="relative">
-          <button
-            onClick={() => setShowLayerMenu(!showLayerMenu)}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-950/90 hover:bg-zinc-900 border border-zinc-700/80 hover:border-cyan-400 text-zinc-200 text-xs font-mono font-medium backdrop-blur-md shadow-2xl transition-all"
-            title="View All Free Online Map Providers"
-          >
-            <Layers className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="font-bold">{FREE_TILE_SERVERS[tileStyle]?.label || 'Map Layers'}</span>
-          </button>
-
-          {showLayerMenu && (
-            <div className="absolute right-0 mt-2 w-72 sm:w-80 max-h-[480px] bg-zinc-950/95 border border-zinc-700/80 rounded-xl p-3 shadow-2xl backdrop-blur-xl flex flex-col gap-2.5 z-50">
-              <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
-                <div className="flex items-center gap-1.5">
-                  <Layers className="w-4 h-4 text-cyan-400" />
-                  <span className="text-xs font-mono uppercase tracking-wider text-zinc-100 font-bold">
-                    Free Online Maps
-                  </span>
-                </div>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-500/40 font-bold">
-                  100% Free
-                </span>
-              </div>
-
-              {/* Category Filter */}
-              <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none">
-                {['All', 'Streets', 'Satellite', 'Terrain', 'Emergency', 'Tactical'].map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => setLayerCategory(cat)}
-                    className={`px-2 py-0.5 rounded text-[10px] font-mono whitespace-nowrap transition-colors ${
-                      layerCategory === cat
-                        ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 font-bold'
-                        : 'bg-zinc-900/80 text-zinc-400 border border-zinc-800 hover:text-zinc-200'
-                    }`}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-
-              {/* Map Tile Options List */}
-              <div className="overflow-y-auto max-h-64 flex flex-col gap-1 pr-1 custom-scrollbar">
-                {(Object.keys(FREE_TILE_SERVERS) as TileStyle[])
-                  .filter((key) => {
-                    const cfg = FREE_TILE_SERVERS[key];
-                    return layerCategory === 'All' || cfg.category === layerCategory;
-                  })
-                  .map((key) => {
-                    const cfg = FREE_TILE_SERVERS[key];
-                    const isActive = tileStyle === key;
-                    return (
-                      <button
-                        key={key}
-                        onClick={() => {
-                          setTileStyle(key);
-                          setShowLayerMenu(false);
-                        }}
-                        className={`flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-mono transition-all text-left group ${
-                          isActive
-                            ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/50 shadow-sm'
-                            : 'text-zinc-300 hover:bg-zinc-900 hover:text-white border border-transparent'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <span className="text-sm shrink-0">{cfg.icon}</span>
-                          <div className="flex flex-col min-w-0">
-                            <span className="font-semibold text-xs text-zinc-100 group-hover:text-cyan-200 truncate">
-                              {cfg.label}
-                            </span>
-                            <span className="text-[10px] text-zinc-400 truncate">{cfg.subtext}</span>
-                          </div>
-                        </div>
-                        {isActive && <Check className="w-4 h-4 text-cyan-400 shrink-0" />}
-                      </button>
-                    );
-                  })}
-              </div>
-
-              <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between text-[9px] font-mono text-zinc-400">
-                <span>Free Open Access</span>
-                <span className="text-cyan-400 font-bold">OpenStreetMap & Esri</span>
-              </div>
-            </div>
-          )}
-        </div>
-
         {/* Reticle HUD Toggle */}
         <button
           onClick={() => setShowReticle(!showReticle)}

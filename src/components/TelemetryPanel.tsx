@@ -1,5 +1,6 @@
 import { Drone } from "../types";
-import { Activity } from "lucide-react";
+import { Activity, Usb } from "lucide-react";
+import { useDRS } from "../store";
 
 function DataPoint({ label, value, unit }: { label: string, value: string | number, unit?: string }) {
   return (
@@ -14,10 +15,20 @@ function DataPoint({ label, value, unit }: { label: string, value: string | numb
 }
 
 export function TelemetryPanel({ drone }: { drone: Drone }) {
+  const { serialConnected } = useDRS();
+  const isHwLinked = Boolean(drone.isHardwareLinked || serialConnected);
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex justify-between items-center">
-        <h2 className="text-[10px] font-bold tracking-widest text-zinc-500 uppercase">Live Telemetry</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-[10px] font-bold tracking-widest text-zinc-500 uppercase">Live Telemetry</h2>
+          {isHwLinked && (
+            <span className="flex items-center gap-1 text-[9px] font-mono font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/40 px-1.5 py-0.5 rounded">
+              <Usb className="w-2.5 h-2.5" /> HW LINKED
+            </span>
+          )}
+        </div>
         <Activity className="w-3 h-3 text-cyan-500/50" />
       </div>
       

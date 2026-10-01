@@ -23,6 +23,7 @@ import {
   Smartphone,
   Shield,
   Eye,
+  Focus,
 } from "lucide-react";
 
 export type CameraLensId = string;
@@ -398,10 +399,68 @@ export function LiveVideoPanel({
     }
   };
 
+  // Auto-Framing state & smooth dynamic centering loop
+  const [isAutoFraming, setIsAutoFraming] = useState(false);
+  const [framingOffset, setFramingOffset] = useState<{
+    x: number;
+    y: number;
+    zoom: number;
+    targetName: string;
+    confidence: number;
+  }>({
+    x: -18,
+    y: -14,
+    zoom: 1.85,
+    targetName: "SURVIVOR #01",
+    confidence: 98.4,
+  });
+
+  useEffect(() => {
+    if (!isAutoFraming) return;
+
+    let animId: number;
+    const startTime = Date.now();
+
+    const updateAutoFraming = () => {
+      const elapsed = (Date.now() - startTime) / 1000;
+      const targetBaseX = activeSource.lensType === "thermal-flir" ? -28 : -18;
+      const targetBaseY = activeSource.lensType === "thermal-flir" ? -10 : -14;
+
+      const swayX = Math.sin(elapsed * 0.7) * 10 + Math.cos(elapsed * 0.3) * 5;
+      const swayY = Math.cos(elapsed * 0.6) * 6;
+
+      const targetLabel =
+        activeSource.lensType === "thermal-flir"
+          ? "HEAT SIGNATURE [37.2°C]"
+          : activeSource.lensType === "visitor-camera" || activeSource.lensType === "device-webcam"
+          ? "OPERATOR (CENTER STAGE)"
+          : "SURVIVOR #01 (LOCKED)";
+
+      setFramingOffset({
+        x: targetBaseX + swayX,
+        y: targetBaseY + swayY,
+        zoom: 1.85 + Math.sin(elapsed * 0.35) * 0.08,
+        targetName: targetLabel,
+        confidence: 97.6 + Math.sin(elapsed * 1.5) * 1.8,
+      });
+
+      animId = requestAnimationFrame(updateAutoFraming);
+    };
+
+    updateAutoFraming();
+    return () => cancelAnimationFrame(animId);
+  }, [isAutoFraming, activeSource.lensType]);
+
+  const currentZoom = isAutoFraming ? framingOffset.zoom : zoom;
+  const currentPan = isAutoFraming ? framingOffset.x : ptz.pan * 0.4;
+  const currentTilt = isAutoFraming ? framingOffset.y : ptz.tilt * 0.4;
+
   const transformStyle = {
-    transform: `scale(${zoom}) translate(${ptz.pan * 0.4}px, ${ptz.tilt * 0.4}px)`,
+    transform: `scale(${currentZoom}) translate(${currentPan}px, ${currentTilt}px)`,
     transformOrigin: "center center",
-    transition: "transform 0.12s ease-out",
+    transition: isAutoFraming
+      ? "transform 0.45s cubic-bezier(0.25, 1, 0.5, 1)"
+      : "transform 0.12s ease-out",
   };
 
   // Filter sources for the dropdown
@@ -676,6 +735,22 @@ export function LiveVideoPanel({
             title="Toggle Tactical HUD"
           >
             <Crosshair className="w-3.5 h-3.5" />
+          </button>
+
+          {/* AI Auto-Framing Toggle */}
+          <button
+            onClick={() => setIsAutoFraming(!isAutoFraming)}
+            className={`p-1.5 rounded text-xs transition-all flex items-center gap-1 ${
+              isAutoFraming
+                ? "bg-cyan-500/25 text-cyan-300 border border-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.3)] animate-pulse font-bold"
+                : "text-zinc-400 hover:text-zinc-200 bg-zinc-800 border border-zinc-700/50"
+            }`}
+            title={isAutoFraming ? "Auto-Framing: ON (Tracking Subject)" : "Enable AI Auto-Framing"}
+          >
+            <Focus className="w-3.5 h-3.5" />
+            <span className="hidden xl:inline text-[9px]">
+              {isAutoFraming ? "AUTO-FRAME" : "FRAME"}
+            </span>
           </button>
 
           {/* PTZ Controls Toggle */}
@@ -953,6 +1028,43 @@ export function LiveVideoPanel({
           <div className="absolute top-12 left-1/2 -translate-x-1/2 bg-cyan-500 text-black px-3 py-1 rounded font-bold font-mono text-xs shadow-lg animate-bounce flex items-center gap-1.5 z-40">
             <Camera className="w-3.5 h-3.5" />
             <span>SNAPSHOT CAPTURED ({activeSource.shortLabel})</span>
+          </div>
+        )}
+
+        {/* AI Auto-Framing Subject Tracking Overlay */}
+        {isAutoFraming && (
+          <div className="absolute inset-0 pointer-events-none z-30 flex items-center justify-center">
+            {/* Top Banner Indicator */}
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-950/90 border border-cyan-400/80 shadow-[0_0_12px_rgba(6,182,212,0.35)] backdrop-blur-md text-[10px] font-mono text-cyan-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
+              <span className="font-bold text-white tracking-wider">AUTO-FRAME ACTIVE</span>
+              <span className="text-zinc-400">•</span>
+              <span className="text-cyan-300 font-semibold">{framingOffset.targetName}</span>
+              <span className="text-[9px] bg-cyan-500/20 text-cyan-300 px-1.5 rounded border border-cyan-400/40 font-bold">
+                {framingOffset.confidence.toFixed(1)}%
+              </span>
+            </div>
+
+            {/* Dynamic Target Framing Brackets */}
+            <div className="relative w-52 h-52 flex items-center justify-center animate-pulse">
+              <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.6)]" />
+              <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.6)]" />
+              <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.6)]" />
+              <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.6)]" />
+
+              <div className="w-3 h-3 rounded-full border border-cyan-300/80 flex items-center justify-center">
+                <div className="w-1 h-1 bg-cyan-400 rounded-full" />
+              </div>
+
+              <div className="absolute -top-5 left-0 flex items-center gap-1 bg-cyan-950/90 border border-cyan-400/60 rounded px-1.5 py-0.2 text-[9px] font-mono font-bold text-cyan-300 shadow">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                <span>LOCK: {framingOffset.targetName}</span>
+              </div>
+
+              <div className="absolute -bottom-5 right-0 bg-black/80 border border-cyan-500/40 rounded px-1.5 py-0.2 text-[9px] font-mono text-zinc-300">
+                AUTO PTZ • {currentZoom.toFixed(1)}x ZOOM
+              </div>
+            </div>
           </div>
         )}
       </div>

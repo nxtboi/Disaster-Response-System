@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useDRS } from "../store";
 import { cn } from "../lib/utils";
 import { 
-  Crosshair, Navigation, Video, Activity, Map as MapIcon, 
+  Crosshair, Navigation, Video, Activity,
   Radio, Target, AlertTriangle, Settings, Plus, LayoutDashboard, LogOut, Cpu, Route,
   Trash2, X, ShieldAlert, Sparkles, Check, ChevronRight, Zap, Mic, Lock
 } from "lucide-react";
@@ -11,7 +11,6 @@ import { ConnectionStatus, Drone } from "../types";
 
 const NAV_ITEMS = [
   { id: "Dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { id: "Tactical Map", icon: MapIcon, label: "Live Tactical Map" },
   { id: "Live Monitoring", icon: Video, label: "Live Monitoring" },
   { id: "Voice Detection", icon: Mic, label: "Gnani.ai Voice AI" },
   { id: "Missions", icon: Target, label: "Autonomous Missions" },

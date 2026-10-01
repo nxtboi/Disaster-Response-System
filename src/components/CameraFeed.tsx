@@ -23,6 +23,7 @@ import {
   Share2,
   User,
   RefreshCw,
+  Focus,
 } from "lucide-react";
 import { motion, useDragControls } from "motion/react";
 import { Drone } from "../types";
@@ -82,6 +83,7 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
   const [ptz, setPtz] = useState<{ pan: number; tilt: number }>({ pan: 0, tilt: 0 });
   const [snapshotFlash, setSnapshotFlash] = useState(false);
   const [recSeconds, setRecSeconds] = useState(145);
+  const [isAutoFraming, setIsAutoFraming] = useState(false);
 
   // Resizeable dimensions state
   const [dimensions, setDimensions] = useState<{ width: number; height: number }>({
@@ -582,6 +584,30 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
             {zoom}x
           </button>
 
+          {/* Auto-Framing Toggle Button */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsAutoFraming((prev) => !prev);
+            }}
+            className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] border transition-all ${
+              isAutoFraming
+                ? "bg-cyan-500/25 text-cyan-300 border-cyan-400 font-bold shadow-[0_0_10px_rgba(6,182,212,0.35)] animate-pulse"
+                : "border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+            }`}
+            title={
+              isAutoFraming
+                ? "Auto-Framing Active: Tracking primary subject (Click to Disengage)"
+                : "Engage AI Auto-Framing (Center Stage Subject & Survivor Tracking)"
+            }
+          >
+            <Focus className={`w-3 h-3 ${isAutoFraming ? "text-cyan-400" : "text-zinc-400"}`} />
+            {!isTiny && (
+              <span>{isAutoFraming ? "FRAME ON" : "FRAME"}</span>
+            )}
+          </button>
+
           {/* Snapshot Button */}
           <button
             type="button"
@@ -856,6 +882,7 @@ export function CameraFeed({ drone, isFloating = true, onClose }: CameraFeedProp
           drone1RemoteFrame={drone1RemoteFrame}
           drone1Broadcast={drone1Broadcast}
           localBroadcastStream={localStream}
+          isAutoFraming={isAutoFraming}
         />
 
         {/* REAL-TIME DATA OVERLAY HUD COMPONENT */}

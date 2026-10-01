@@ -36,6 +36,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Share2,
+  Focus,
 } from "lucide-react";
 
 interface CameraWindowProps {
@@ -275,6 +276,21 @@ export function CameraWindow({
             title={config.showAiBoxes ? "AI Target Tracking: ON" : "AI Target Tracking: OFF"}
           >
             <Crosshair className="w-3.5 h-3.5" />
+          </button>
+
+          {/* AI Auto-Framing Toggle */}
+          <button
+            onClick={() =>
+              onUpdateConfig(config.slotId, { isAutoFraming: !config.isAutoFraming })
+            }
+            className={`p-1 rounded text-xs transition-all flex items-center gap-1 ${
+              config.isAutoFraming
+                ? "bg-cyan-500/25 text-cyan-300 border border-cyan-400 font-bold shadow-[0_0_8px_rgba(6,182,212,0.3)] animate-pulse"
+                : "hover:bg-zinc-800 hover:text-zinc-200 text-zinc-400"
+            }`}
+            title={config.isAutoFraming ? "Auto-Framing: ON (Tracking Subject)" : "Enable AI Auto-Framing"}
+          >
+            <Focus className="w-3.5 h-3.5" />
           </button>
 
           {/* PTZ Gimbal Control Toggle */}
@@ -560,6 +576,7 @@ export function CameraWindow({
           ptz={config.ptz}
           showAiBoxes={config.showAiBoxes}
           onSnapshot={handleTakeSnapshot}
+          isAutoFraming={config.isAutoFraming}
         />
 
         {/* Broadcasting Notification Banner (Floating bottom center) */}

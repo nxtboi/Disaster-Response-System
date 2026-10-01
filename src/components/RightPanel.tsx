@@ -5,6 +5,7 @@ import { LidarPanel } from "./LidarPanel";
 import { AlertPanel } from "./AlertPanel";
 import { ReadyToProtect } from "./ReadyToProtect";
 import { VoiceFeed } from "./VoiceFeed";
+import { UsbSerialPanel } from "./UsbSerialPanel";
 import {
   PanelRightClose,
   PanelRightOpen,
@@ -60,8 +61,10 @@ export function RightPanel() {
             <TelemetryPanel drone={selectedDrone} />
             <LidarPanel />
             <VoiceFeed />
+            <UsbSerialPanel />
           </>
         )}
+        {!selectedDrone && <UsbSerialPanel />}
         <AlertPanel />
       </div>
     </aside>

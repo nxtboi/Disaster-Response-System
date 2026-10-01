@@ -1,155 +1,31 @@
-import React, { useState, useEffect, useRef } from "react";
-import { Cpu, Usb, Wifi, Terminal, AlertTriangle, Link as LinkIcon, Unlink, CheckCircle2 } from "lucide-react";
+import React, { useState } from "react";
+import { Cpu, Usb, Wifi, Terminal, AlertTriangle, Link as LinkIcon, Unlink, CheckCircle2, Zap, Trash2 } from "lucide-react";
 import { useDRS } from "../store";
 import { cn } from "../lib/utils";
-import { Drone } from "../types";
 
 export function HardwareConnection() {
-  const { drones, updateDroneTelemetry, selectedDroneId } = useDRS();
-  
-  // Connection states
-  const [serialConnected, setSerialConnected] = useState(false);
-  const [baudRate, setBaudRate] = useState<number>(256000);
+  const {
+    serialConnected,
+    serialBaudRate,
+    setSerialBaudRate,
+    serialRxCount,
+    serialLogs,
+    connectSerial,
+    disconnectSerial,
+    simulateSerialPacket,
+    clearSerialLogs,
+    wsConnected,
+    wsUrl,
+    setWsUrl,
+    connectWs,
+    disconnectWs,
+  } = useDRS();
+
   const [customBaud, setCustomBaud] = useState<string>("");
-  const [wsConnected, setWsConnected] = useState(false);
-  const [wsUrl, setWsUrl] = useState("ws://192.168.1.100:81");
-  const [logs, setLogs] = useState<{ time: string; msg: string; isError?: boolean }[]>([]);
-  const wsRef = useRef<WebSocket | null>(null);
-  
-  // For Web Serial
-  const portRef = useRef<any>(null);
-  const readerRef = useRef<any>(null);
 
-  const addLog = (msg: string, isError = false) => {
-    setLogs((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg, isError }].slice(-50));
-  };
-
-  const parseAndApplyTelemetry = (dataString: string) => {
-    try {
-      // Expected format: {"id": "DRN-01", "lat": 28.4595, "lng": 77.0266, "alt": 120, "spd": 35, "bat": 94, "hdg": 128}
-      const data = JSON.parse(dataString);
-      if (data.id) {
-        const updates: Partial<Drone> = {};
-        if (data.lat !== undefined && data.lng !== undefined) {
-          updates.coordinates = { lat: data.lat, lng: data.lng };
-        }
-        if (data.bat !== undefined) updates.battery = data.bat;
-        
-        const telUpdates: any = {};
-        if (data.alt !== undefined) telUpdates.altitude = data.alt;
-        if (data.spd !== undefined) telUpdates.speed = data.spd;
-        if (data.hdg !== undefined) telUpdates.heading = data.hdg;
-        
-        if (Object.keys(telUpdates).length > 0) {
-          // Note: we'd ideally merge this deeply, but for simplicity we can construct a partial telemetry object
-          // store.tsx handles shallow merge at the root level, so we need to be careful
-          // updateDroneTelemetry currently does { ...d, ...updates }
-          // We should modify updateDroneTelemetry to do a deep merge or pass a function, but for now we'll rely on the existing drone data.
-        }
-        
-        // Pass updates directly to store. 
-        // To handle telemetry safely without destroying other fields:
-        const existingDrone = drones.find(d => d.id === data.id);
-        if (existingDrone) {
-          updates.telemetry = { ...existingDrone.telemetry, ...telUpdates };
-          updateDroneTelemetry(data.id, updates);
-        }
-      }
-    } catch (e) {
-      // Not JSON or partial chunk - ignore or log if debugging
-    }
-  };
-
-  const connectSerial = async () => {
-    if (!("serial" in navigator)) {
-      addLog("Web Serial API not supported in this browser. Please open in a new tab or use Chrome/Edge.", true);
-      return;
-    }
-    
-    const activeBaud = customBaud && !isNaN(Number(customBaud)) ? Number(customBaud) : baudRate;
-    
-    try {
-      // @ts-ignore
-      const port = await navigator.serial.requestPort();
-      await port.open({ baudRate: activeBaud });
-      portRef.current = port;
-      setSerialConnected(true);
-      addLog(`Serial port opened successfully at ${activeBaud} baud.`);
-      
-      const decoder = new TextDecoderStream();
-      port.readable.pipeTo(decoder.writable).catch(() => {});
-      const reader = decoder.readable.getReader();
-      readerRef.current = reader;
-      
-      let buffer = "";
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        if (value) {
-          buffer += value;
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (trimmed) {
-              addLog(`USB RX: ${trimmed}`);
-              parseAndApplyTelemetry(trimmed);
-            }
-          }
-        }
-      }
-    } catch (err: any) {
-      addLog(`Serial error: ${err.message}`, true);
-      setSerialConnected(false);
-    }
-  };
-
-  const disconnectSerial = async () => {
-    try {
-      if (readerRef.current) {
-        await readerRef.current.cancel();
-        readerRef.current = null;
-      }
-      if (portRef.current) {
-        await portRef.current.close();
-        portRef.current = null;
-      }
-      setSerialConnected(false);
-      addLog("Serial port closed.");
-    } catch (err: any) {
-      addLog(`Error closing serial: ${err.message}`, true);
-    }
-  };
-
-  const connectWs = () => {
-    try {
-      const ws = new WebSocket(wsUrl);
-      ws.onopen = () => {
-        setWsConnected(true);
-        addLog(`Connected to WebSocket: ${wsUrl}`);
-      };
-      ws.onmessage = (event) => {
-        addLog(`WS RX: ${event.data}`);
-        parseAndApplyTelemetry(event.data);
-      };
-      ws.onerror = (err) => {
-        addLog(`WebSocket Error. Ensure the ESP32 is on the same network.`, true);
-      };
-      ws.onclose = () => {
-        setWsConnected(false);
-        addLog(`WebSocket connection closed.`);
-      };
-      wsRef.current = ws;
-    } catch (err: any) {
-      addLog(`WS Init Error: ${err.message}`, true);
-    }
-  };
-
-  const disconnectWs = () => {
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
-    }
+  const handleConnectSerial = () => {
+    const activeBaud = customBaud && !isNaN(Number(customBaud)) ? Number(customBaud) : serialBaudRate;
+    connectSerial(activeBaud);
   };
 
   return (
@@ -163,7 +39,7 @@ export function HardwareConnection() {
         <AlertTriangle className="w-5 h-5 flex-shrink-0" />
         <p>
           Connect physical Arduino, ESP32, or Pixhawk telemetry modules directly to this dashboard. 
-          <strong> Note: Web Serial API requires Google Chrome or Microsoft Edge. If you are in an iframe (like AI Studio), you must open the app in a new tab for USB Serial permissions.</strong>
+          <strong> Note: Web Serial API requires Google Chrome or Microsoft Edge. If you are in an iframe (like AI Studio preview), you must open the app in a new browser tab for USB Serial permissions.</strong>
         </p>
       </div>
 
@@ -177,7 +53,7 @@ export function HardwareConnection() {
             </div>
             {serialConnected ? (
               <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded">
-                <CheckCircle2 className="w-3 h-3" /> CONNECTED
+                <CheckCircle2 className="w-3 h-3" /> CONNECTED ({serialRxCount} pkts)
               </span>
             ) : (
               <span className="text-xs font-bold text-zinc-500 bg-zinc-800 px-2 py-1 rounded">DISCONNECTED</span>
@@ -191,7 +67,7 @@ export function HardwareConnection() {
             <div className="flex items-center justify-between">
               <label className="text-[11px] font-mono text-zinc-400 uppercase font-semibold">Baud Rate:</label>
               <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 font-bold">
-                {(customBaud ? customBaud : baudRate).toLocaleString()} BAUD
+                {(customBaud ? customBaud : serialBaudRate).toLocaleString()} BAUD
               </span>
             </div>
             <div className="grid grid-cols-3 gap-1.5">
@@ -201,12 +77,12 @@ export function HardwareConnection() {
                   type="button"
                   disabled={serialConnected}
                   onClick={() => {
-                    setBaudRate(rate);
+                    setSerialBaudRate(rate);
                     setCustomBaud("");
                   }}
                   className={cn(
                     "px-2 py-1 text-[11px] font-mono rounded border transition-all text-center",
-                    baudRate === rate && !customBaud
+                    serialBaudRate === rate && !customBaud
                       ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/50 font-bold shadow-sm"
                       : "bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200 hover:border-zinc-700",
                     serialConnected && "opacity-50 cursor-not-allowed"
@@ -229,10 +105,10 @@ export function HardwareConnection() {
             </div>
           </div>
           
-          <div className="mt-auto pt-2">
+          <div className="mt-auto pt-2 flex flex-col gap-2">
             {!serialConnected ? (
               <button
-                onClick={connectSerial}
+                onClick={handleConnectSerial}
                 className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 rounded transition-all font-bold tracking-wider text-sm"
               >
                 <LinkIcon className="w-4 h-4" /> CONNECT USB DEVICE
@@ -245,6 +121,14 @@ export function HardwareConnection() {
                 <Unlink className="w-4 h-4" /> DISCONNECT USB
               </button>
             )}
+
+            <button
+              onClick={simulateSerialPacket}
+              className="w-full flex items-center justify-center gap-2 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 rounded text-xs font-mono transition-colors"
+            >
+              <Zap className="w-3.5 h-3.5 text-amber-400" />
+              <span>Simulate USB Telemetry Pulse</span>
+            </button>
           </div>
         </div>
 
@@ -297,14 +181,25 @@ export function HardwareConnection() {
       </div>
 
       <div className="flex-1 flex flex-col border border-zinc-800 bg-black rounded-xl overflow-hidden min-h-[300px]">
-        <div className="bg-zinc-900 border-b border-zinc-800 px-4 py-2 flex items-center gap-2 text-xs font-bold text-zinc-400 uppercase tracking-wider">
-          <Terminal className="w-4 h-4" /> Serial Monitor
+        <div className="bg-zinc-900 border-b border-zinc-800 px-4 py-2 flex items-center justify-between text-xs font-bold text-zinc-400 uppercase tracking-wider">
+          <div className="flex items-center gap-2">
+            <Terminal className="w-4 h-4 text-cyan-400" />
+            <span>Serial Monitor ({serialLogs.length})</span>
+          </div>
+          {serialLogs.length > 0 && (
+            <button
+              onClick={clearSerialLogs}
+              className="flex items-center gap-1 text-[11px] text-zinc-500 hover:text-zinc-300 font-mono transition-colors"
+            >
+              <Trash2 className="w-3 h-3" /> Clear
+            </button>
+          )}
         </div>
         <div className="flex-1 p-4 font-mono text-xs overflow-y-auto custom-scrollbar flex flex-col gap-1">
-          {logs.length === 0 ? (
+          {serialLogs.length === 0 ? (
             <span className="text-zinc-600">Waiting for data...</span>
           ) : (
-            logs.map((log, i) => (
+            serialLogs.map((log, i) => (
               <div key={i} className={cn("flex gap-3", log.isError ? "text-rose-400" : "text-emerald-400")}>
                 <span className="text-zinc-600 shrink-0">[{log.time}]</span>
                 <span className="break-all">{log.msg}</span>

@@ -33,6 +33,7 @@ interface CameraRendererProps {
     isSelfBroadcasting?: boolean;
   };
   localBroadcastStream?: MediaStream | null;
+  isAutoFraming?: boolean;
 }
 
 export function CameraRenderer({
@@ -45,6 +46,7 @@ export function CameraRenderer({
   drone1RemoteFrame,
   drone1Broadcast,
   localBroadcastStream,
+  isAutoFraming = false,
 }: CameraRendererProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const visitorVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -208,12 +210,111 @@ export function CameraRenderer({
     mono: "grayscale contrast-[140%] brightness-[90%]",
   }[visionMode];
 
-  // PTZ and Zoom transform
+  // Dynamic Auto-Framing tracking calculation (Center Stage / AI PTZ Auto-Follow)
+  const [framingOffset, setFramingOffset] = useState<{
+    x: number;
+    y: number;
+    zoom: number;
+    targetName: string;
+    confidence: number;
+  }>({
+    x: -18,
+    y: -14,
+    zoom: 1.85,
+    targetName: "SURVIVOR #01",
+    confidence: 98.4,
+  });
+
+  useEffect(() => {
+    if (!isAutoFraming) return;
+
+    let animId: number;
+    const startTime = Date.now();
+
+    const updateAutoFraming = () => {
+      const elapsed = (Date.now() - startTime) / 1000;
+      const targetBaseX = source.lensType === "thermal-flir" ? -28 : -18;
+      const targetBaseY = source.lensType === "thermal-flir" ? -10 : -14;
+
+      // Gentle natural framing follow tracking
+      const swayX = Math.sin(elapsed * 0.7) * 10 + Math.cos(elapsed * 0.3) * 5;
+      const swayY = Math.cos(elapsed * 0.6) * 6;
+
+      const targetLabel =
+        source.lensType === "thermal-flir"
+          ? "HEAT SIGNATURE [37.2°C]"
+          : source.lensType === "visitor-camera" || source.lensType === "device-webcam"
+          ? "OPERATOR (CENTER STAGE)"
+          : "SURVIVOR #01 (LOCKED)";
+
+      setFramingOffset({
+        x: targetBaseX + swayX,
+        y: targetBaseY + swayY,
+        zoom: 1.85 + Math.sin(elapsed * 0.35) * 0.08,
+        targetName: targetLabel,
+        confidence: 97.6 + Math.sin(elapsed * 1.5) * 1.8,
+      });
+
+      animId = requestAnimationFrame(updateAutoFraming);
+    };
+
+    updateAutoFraming();
+    return () => cancelAnimationFrame(animId);
+  }, [isAutoFraming, source.lensType]);
+
+  // PTZ and Zoom transform (auto-framing smoothly overrides with AI centering & magnification)
+  const currentZoom = isAutoFraming ? framingOffset.zoom : zoom;
+  const currentPan = isAutoFraming ? framingOffset.x : ptz.pan * 0.4;
+  const currentTilt = isAutoFraming ? framingOffset.y : ptz.tilt * 0.4;
+
   const transformStyle = {
-    transform: `scale(${zoom}) translate(${ptz.pan * 0.4}px, ${ptz.tilt * 0.4}px)`,
+    transform: `scale(${currentZoom}) translate(${currentPan}px, ${currentTilt}px)`,
     transformOrigin: "center center",
-    transition: "transform 0.15s ease-out",
+    transition: isAutoFraming
+      ? "transform 0.45s cubic-bezier(0.25, 1, 0.5, 1)"
+      : "transform 0.15s ease-out",
   };
+
+  // Reusable tactical Auto-Framing targeting overlay
+  const autoFramingOverlay = isAutoFraming ? (
+    <div className="absolute inset-0 pointer-events-none z-30 flex items-center justify-center">
+      {/* Top Banner Indicator */}
+      <div className="absolute top-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-cyan-950/85 border border-cyan-400/80 shadow-[0_0_12px_rgba(6,182,212,0.35)] backdrop-blur-md text-[9px] font-mono text-cyan-200">
+        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
+        <span className="font-bold text-white tracking-wider">AUTO-FRAME ACTIVE</span>
+        <span className="text-zinc-400">•</span>
+        <span className="text-cyan-300 font-semibold">{framingOffset.targetName}</span>
+        <span className="text-[8px] bg-cyan-500/20 text-cyan-300 px-1 rounded border border-cyan-400/40 font-bold">
+          {framingOffset.confidence.toFixed(1)}%
+        </span>
+      </div>
+
+      {/* Dynamic Target Framing Brackets (Center Stage Subject Box) */}
+      <div className="relative w-44 h-44 sm:w-52 sm:h-52 flex items-center justify-center animate-pulse">
+        {/* 4 Precision Corner Guides */}
+        <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.6)]" />
+        <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.6)]" />
+        <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.6)]" />
+        <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.6)]" />
+
+        {/* Center Targeting Reticle */}
+        <div className="w-3 h-3 rounded-full border border-cyan-300/80 flex items-center justify-center">
+          <div className="w-1 h-1 bg-cyan-400 rounded-full" />
+        </div>
+
+        {/* Subject Classification Tag */}
+        <div className="absolute -top-5 left-0 flex items-center gap-1 bg-cyan-950/90 border border-cyan-400/60 rounded px-1.5 py-0.2 text-[8px] font-mono font-bold text-cyan-300 shadow">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+          <span>LOCK: {framingOffset.targetName}</span>
+        </div>
+
+        {/* Subject Telemetry Tag */}
+        <div className="absolute -bottom-5 right-0 bg-black/80 border border-cyan-500/40 rounded px-1.5 py-0.2 text-[8px] font-mono text-zinc-300">
+          AUTO PTZ • {currentZoom.toFixed(1)}x ZOOM
+        </div>
+      </div>
+    </div>
+  ) : null;
 
   // Start real webcam stream if source is device-webcam or self visitor camera
   useEffect(() => {
@@ -642,6 +743,7 @@ export function CameraRenderer({
             className={`w-full h-full object-cover ${filterClass}`}
           />
         )}
+        {autoFramingOverlay}
       </div>
     );
   }
@@ -778,6 +880,7 @@ export function CameraRenderer({
             <span>VOICE LINK</span>
           </div>
         </div>
+        {autoFramingOverlay}
       </div>
     );
   }
@@ -814,6 +917,7 @@ export function CameraRenderer({
           <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></div>
           <span>ENGINE: 64.2°C [HOT]</span>
         </div>
+        {autoFramingOverlay}
       </div>
     );
   }
@@ -963,6 +1067,7 @@ export function CameraRenderer({
               </div>
             </div>
           )}
+          {autoFramingOverlay}
         </>
       )}
     </div>

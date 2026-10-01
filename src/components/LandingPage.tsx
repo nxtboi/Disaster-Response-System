@@ -84,7 +84,7 @@ export function LandingPage({
               className="group relative px-8 py-4 bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold tracking-widest uppercase text-sm rounded-sm transition-all duration-300 shadow-[0_0_30px_rgba(6,182,212,0.4)] flex items-center gap-2.5"
             >
               <Crosshair className="w-4 h-4 text-zinc-950" />
-              <span>Launch Live Map & Command Center</span>
+              <span>Launch Command Center</span>
             </button>
             <button
               onClick={onExploreSystem}
@@ -92,12 +92,6 @@ export function LandingPage({
             >
               <span>Explore Fleet</span>
             </button>
-          </motion.div>
-
-          <motion.div variants={itemVariants} className="mt-8 flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-950/90 border border-cyan-500/40 text-xs font-mono text-zinc-300 shadow-xl backdrop-blur-md">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-cyan-300 font-semibold">Free Online Map:</span>
-            <span>OpenStreetMap, CARTO Voyager & Esri Satellite HD</span>
           </motion.div>
         </motion.div>
       </div>

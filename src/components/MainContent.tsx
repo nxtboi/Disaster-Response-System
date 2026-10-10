@@ -5,6 +5,7 @@ import { LiveMonitoring } from "./LiveMonitoring";
 import { HardwareConnection } from "./HardwareConnection";
 import { VoiceDetectionPage } from "./VoiceDetectionPage";
 import { MissionPlanner } from "./MissionPlanner";
+import { TinyFishIntelPage } from "./TinyFishIntelPage";
 import { ShieldAlert, AlertTriangle, Info } from "lucide-react";
 import { cn } from "../lib/utils";
 
@@ -20,6 +21,8 @@ export function MainContent() {
           <LiveMonitoring />
         ) : activeView === "Voice Detection" ? (
           <VoiceDetectionPage />
+        ) : activeView === "TinyFish Intel" ? (
+          <TinyFishIntelPage />
         ) : activeView === "Alerts" ? (
            <div className="w-full h-full bg-zinc-950 p-8 overflow-y-auto custom-scrollbar relative z-10 flex flex-col gap-6">
               <h1 className="text-2xl font-bold tracking-widest text-zinc-100 uppercase border-b border-zinc-800 pb-4">System Alerts & Logs</h1>

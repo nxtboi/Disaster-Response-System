@@ -6,6 +6,7 @@ import { AlertPanel } from "./AlertPanel";
 import { ReadyToProtect } from "./ReadyToProtect";
 import { VoiceFeed } from "./VoiceFeed";
 import { UsbSerialPanel } from "./UsbSerialPanel";
+import { TinyFishQuickWidget } from "./TinyFishQuickWidget";
 import {
   PanelRightClose,
   PanelRightOpen,
@@ -55,6 +56,7 @@ export function RightPanel() {
 
       <div className="p-4 flex flex-col gap-4 pb-16 h-full">
         <ReadyToProtect />
+        <TinyFishQuickWidget />
         {selectedDrone && (
           <>
             <BatteryStatus drone={selectedDrone} />

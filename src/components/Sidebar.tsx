@@ -4,7 +4,7 @@ import { cn } from "../lib/utils";
 import { 
   Crosshair, Navigation, Video, Activity,
   Radio, Target, AlertTriangle, Settings, Plus, LayoutDashboard, LogOut, Cpu, Route,
-  Trash2, X, ShieldAlert, Sparkles, Check, ChevronRight, Zap, Mic, Lock
+  Trash2, X, ShieldAlert, Sparkles, Check, ChevronRight, Zap, Mic, Lock, Globe, CloudSun
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { ConnectionStatus, Drone } from "../types";
@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { id: "Live Monitoring", icon: Video, label: "Live Monitoring" },
   { id: "Voice Detection", icon: Mic, label: "Gnani.ai Voice AI" },
   { id: "Missions", icon: Target, label: "Autonomous Missions" },
+  { id: "TinyFish Intel", icon: CloudSun, label: "Weather & Disaster News" },
   { id: "Alerts", icon: AlertTriangle, label: "Alerts" },
   { id: "Hardware", icon: Cpu, label: "Hardware Link" },
 ];

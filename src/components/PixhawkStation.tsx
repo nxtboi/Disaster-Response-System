@@ -45,14 +45,14 @@ import { useDRS } from "../store";
 import { cn } from "../lib/utils";
 
 const PRESET_BAUDS = [
-  { rate: 115200, label: "115,200 BAUD (Pixhawk MicroUSB / TELEM1)" },
+  { rate: 115200, label: "115,200 BAUD (Pixhawk MicroUSB / TELEM1 Default)" },
   { rate: 57600, label: "57,600 BAUD (SiK / 433/915 MHz Telemetry Radio)" },
+  { rate: 9600, label: "9,600 BAUD (Pixhawk Telemetry / SERIALx_BAUD=9 / GPS)" },
   { rate: 921600, label: "921,600 BAUD (High-Speed FTDI / Companion)" },
   { rate: 460800, label: "460,800 BAUD (High Baud)" },
   { rate: 230400, label: "230,400 BAUD" },
   { rate: 38400, label: "38,400 BAUD" },
   { rate: 19200, label: "19,200 BAUD" },
-  { rate: 9600, label: "9,600 BAUD (Standard GPS / NMEA)" },
 ];
 
 export function PixhawkStation() {
@@ -210,10 +210,10 @@ export function PixhawkStation() {
       {/* Connection & Port Control Banner */}
       <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 backdrop-blur-md">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <label className="text-xs font-mono uppercase text-zinc-400 flex items-center gap-1.5 font-bold">
               <Gauge className="w-4 h-4 text-cyan-400" />
-              Baud Rate:
+              Baud:
             </label>
             <select
               value={selectedBaud}
@@ -227,6 +227,30 @@ export function PixhawkStation() {
                 </option>
               ))}
             </select>
+
+            {/* Quick 1-Click Baud Presets including 9600 */}
+            <div className="flex items-center gap-1">
+              {[9600, 57600, 115200, 921600].map((rate) => (
+                <button
+                  key={rate}
+                  type="button"
+                  disabled={serial.connected}
+                  onClick={() => setSelectedBaud(rate)}
+                  className={cn(
+                    "px-2 py-1 text-[10px] font-mono rounded font-bold transition-all border",
+                    selectedBaud === rate
+                      ? rate === 9600
+                        ? "bg-amber-500/25 border-amber-500/60 text-amber-300 shadow-[0_0_8px_rgba(245,158,11,0.25)]"
+                        : "bg-cyan-500/25 border-cyan-500/60 text-cyan-300 shadow-[0_0_8px_rgba(6,182,212,0.2)]"
+                      : "bg-zinc-950/80 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700",
+                    serial.connected && "opacity-50 cursor-not-allowed"
+                  )}
+                  title={rate === 9600 ? "Pixhawk 9600 baud rate (SERIALx_BAUD = 9 or GPS)" : `${rate} baud rate`}
+                >
+                  {rate === 9600 ? "9600 ★" : rate.toLocaleString()}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="flex items-center gap-1.5 text-xs font-mono text-zinc-500">
@@ -1059,20 +1083,20 @@ export function PixhawkStation() {
           </div>
 
           {/* Connect Actions Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {/* Action 1: Unfiltered Request (Primary - Solves missing Pixhawk!) */}
             <div className="bg-zinc-900/40 border border-cyan-500/40 rounded-xl p-5 flex flex-col gap-3 shadow-[0_0_15px_rgba(6,182,212,0.1)]">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-mono font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-2">
                   <Search className="w-4 h-4" />
-                  Scan All Serial Ports (Unfiltered)
+                  Scan All Serial Ports
                 </span>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/30">
-                  RECOMMENDED
+                  UNFILTERED
                 </span>
               </div>
               <p className="text-xs text-zinc-300 font-mono leading-relaxed">
-                Opens the browser's device picker showing <strong>every connected COM port and USB device</strong> without vendor ID filtering. If your Pixhawk uses a CH340, CP2102, FTDI, Holybro, or generic virtual COM port, this guarantees it is visible.
+                Opens browser picker showing <strong>every connected COM port</strong> without vendor filtering. Guarantees CH340, CP2102, FTDI, Holybro, and clones are visible.
               </p>
               <div className="pt-2 mt-auto">
                 <button
@@ -1081,24 +1105,58 @@ export function PixhawkStation() {
                   className="w-full py-2.5 px-4 bg-cyan-500 hover:bg-cyan-400 text-zinc-950 rounded-lg text-xs font-mono font-bold tracking-wider transition-all flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
                 >
                   <LinkIcon className="w-4 h-4" />
-                  <span>{isConnecting ? "OPENING BROWSER PORT MANAGER..." : "SCAN & SELECT FROM ALL COM PORTS"}</span>
+                  <span>{isConnecting ? "OPENING BROWSER..." : "SCAN ALL COM PORTS"}</span>
                 </button>
               </div>
             </div>
 
-            {/* Action 2: Autopilot Filtered Request */}
+            {/* Action 2: Pixhawk 9600 Baud Specialized Connect */}
+            <div className={cn(
+              "rounded-xl p-5 flex flex-col gap-3 transition-all border",
+              selectedBaud === 9600
+                ? "bg-amber-950/20 border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
+                : "bg-zinc-900/40 border-zinc-800 hover:border-amber-500/40"
+            )}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono font-bold uppercase tracking-wider text-amber-300 flex items-center gap-2">
+                  <Gauge className="w-4 h-4 text-amber-400" />
+                  9,600 Baud Pixhawk Link
+                </span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40">
+                  9600 SUPPORT
+                </span>
+              </div>
+              <p className="text-xs text-zinc-300 font-mono leading-relaxed">
+                Automatically sets baud rate to <strong>9,600 baud</strong> (ArduPilot <code className="text-amber-300">SERIALx_BAUD = 9</code>, GPS pass-through, or low-baud telemetry radio) and opens all ports.
+              </p>
+              <div className="pt-2 mt-auto flex flex-col gap-2">
+                <button
+                  onClick={() => {
+                    setSelectedBaud(9600);
+                    handleConnect(true);
+                  }}
+                  disabled={isConnecting}
+                  className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-400 text-zinc-950 rounded-lg text-xs font-mono font-bold tracking-wider transition-all flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
+                >
+                  <Zap className="w-4 h-4" />
+                  <span>{isConnecting ? "CONNECTING..." : "CONNECT AT 9,600 BAUD"}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Action 3: Autopilot Filtered Request */}
             <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-5 flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-200 flex items-center gap-2">
                   <Cpu className="w-4 h-4 text-zinc-400" />
-                  Scan Autopilots (Filtered by 12+ VIDs)
+                  Autopilot Filtered (12+ VIDs)
                 </span>
                 <span className="text-[10px] font-mono text-zinc-500">
-                  12 Autopilot Vendor IDs
+                  FILTERED
                 </span>
               </div>
               <p className="text-xs text-zinc-400 font-mono leading-relaxed">
-                Prompts only for devices matching official Pixhawk, Holybro (0x3162), CubePilot (0x2DAE), STMicro (0x0483), 3DR (0x26AC), ArduPilot (0x1209), and SiK Telemetry Radios.
+                Prompts only for devices matching official Pixhawk (0x26AC), Holybro (0x3162), CubePilot (0x2DAE), STMicro (0x0483), and SiK Telemetry Radios.
               </p>
               <div className="pt-2 mt-auto">
                 <button
@@ -1107,7 +1165,7 @@ export function PixhawkStation() {
                   className="w-full py-2.5 px-4 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 hover:text-white rounded-lg text-xs font-mono font-bold tracking-wider transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   <Search className="w-4 h-4" />
-                  <span>{isConnecting ? "SEARCHING..." : "SCAN AUTOPILOT VENDOR IDs ONLY"}</span>
+                  <span>{isConnecting ? "SEARCHING..." : "SCAN AUTOPILOT VIDs ONLY"}</span>
                 </button>
               </div>
             </div>
@@ -1280,17 +1338,34 @@ export function PixhawkStation() {
                 </div>
               </div>
 
-              {/* Check 5: Baud Rate */}
+              {/* Check 5: Baud Rate & 9600 Support */}
               <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 flex flex-col gap-2">
-                <div className="flex items-center gap-2 text-blue-400 font-bold">
-                  <Gauge className="w-4 h-4 shrink-0" />
-                  <span>5. Radio vs USB Baud Rates</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-amber-400 font-bold">
+                    <Gauge className="w-4 h-4 shrink-0" />
+                    <span>5. Pixhawk 9,600 Baud Support</span>
+                  </div>
+                  {selectedBaud === 9600 && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+                      ACTIVE
+                    </span>
+                  )}
                 </div>
                 <p className="text-zinc-400 text-[11px] leading-relaxed">
-                  Direct Pixhawk USB CDC operates at <strong>115,200 baud</strong>. SiK / Holybro 433/915MHz telemetry radios operate at <strong>57,600 baud</strong>.
+                  Pixhawk supports <strong>9,600 baud</strong>! In ArduPilot, setting <code className="text-amber-300">SERIALx_BAUD = 9</code> configures the serial port to 9600 baud (commonly used for GPS pass-through, low-baud telemetry radios, HC-12, or serial bridges).
                 </p>
-                <div className="mt-auto p-2 rounded bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-300">
-                  <strong className="text-emerald-400">Solution:</strong> Switch baud to 57600 when connecting wireless telemetry dongles.
+                <div className="mt-auto p-2 rounded bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-300 flex items-center justify-between gap-2">
+                  <span>Current: <strong className="text-cyan-300">{selectedBaud.toLocaleString()} Baud</strong></span>
+                  {selectedBaud !== 9600 ? (
+                    <button
+                      onClick={() => setSelectedBaud(9600)}
+                      className="px-2 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-[10px] font-bold transition-colors"
+                    >
+                      Set to 9,600 Baud
+                    </button>
+                  ) : (
+                    <span className="text-emerald-400 font-bold text-[10px]">✓ Ready for 9600 Link</span>
+                  )}
                 </div>
               </div>
 

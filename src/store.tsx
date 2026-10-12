@@ -7,6 +7,11 @@ export interface UserLocation {
   lng: number;
   accuracy?: number;
   timestamp?: number;
+  source?: "pixhawk" | "laptop";
+  satCount?: number;
+  fixType?: string;
+  altMSL?: number;
+  hdop?: number;
 }
 
 export interface UserAccount {
@@ -46,9 +51,21 @@ interface DRSContextType {
   updateDroneTelemetry: (id: string, updates: Partial<Drone>) => void;
   userLocation: UserLocation | null;
   setUserLocation: (loc: UserLocation | null) => void;
+  gpsSourceMode: "pixhawk" | "laptop";
+  setGpsSourceMode: (mode: "pixhawk" | "laptop") => void;
+  setGpsFromPixhawk: (coords: {
+    lat: number;
+    lng: number;
+    accuracy?: number;
+    altMSL?: number;
+    altAGL?: number;
+    satCount?: number;
+    fixType?: string;
+    hdop?: number;
+  }, centerMap?: boolean, deployNearby?: boolean) => void;
   isLocatingUser: boolean;
   userLocationError: string | null;
-  requestUserLocation: (deployFleetNearby?: boolean) => Promise<UserLocation | null>;
+  requestUserLocation: (deployFleetNearby?: boolean, forceLaptop?: boolean) => Promise<UserLocation | null>;
   deployFleetToLocation: (lat: number, lng: number) => void;
   centerMapTarget: { lat: number; lng: number; zoom?: number; timestamp: number } | null;
   setCenterMapTarget: (target: { lat: number; lng: number; zoom?: number; timestamp: number } | null) => void;
@@ -196,7 +213,75 @@ export function DRSProvider({ children }: { children: ReactNode }) {
   const [drones, setDrones] = useState<Drone[]>(MOCK_DRONES);
   const [selectedDroneId, setSelectedDroneId] = useState<string | null>("DRN-01");
   const [activeView, setActiveView] = useState("Dashboard");
-  const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
+  const [userLocation, setUserLocation] = useState<UserLocation | null>(() => ({
+    lat: 28.4595,
+    lng: 77.0266,
+    accuracy: 1.2,
+    timestamp: Date.now(),
+    source: "pixhawk",
+    satCount: 16,
+    fixType: "3D FIX",
+    altMSL: 142.5,
+    hdop: 0.85,
+  }));
+  const [gpsSourceMode, setGpsSourceModeState] = useState<"pixhawk" | "laptop">(() => {
+    try {
+      const saved = localStorage.getItem("drs_gps_source_mode");
+      if (saved === "laptop") return "laptop";
+    } catch (_) {}
+    return "pixhawk";
+  });
+
+  const setGpsSourceMode = (mode: "pixhawk" | "laptop") => {
+    setGpsSourceModeState(mode);
+    try {
+      localStorage.setItem("drs_gps_source_mode", mode);
+    } catch (_) {}
+  };
+
+  const setGpsFromPixhawk = (
+    coords: {
+      lat: number;
+      lng: number;
+      accuracy?: number;
+      altMSL?: number;
+      altAGL?: number;
+      satCount?: number;
+      fixType?: string;
+      hdop?: number;
+    },
+    centerMap = false,
+    deployNearby = false
+  ) => {
+    if (!coords || !coords.lat || !coords.lng) return;
+    const loc: UserLocation = {
+      lat: Number(coords.lat.toFixed(6)),
+      lng: Number(coords.lng.toFixed(6)),
+      accuracy: coords.accuracy || (coords.hdop ? Number((coords.hdop * 2.5).toFixed(1)) : 1.5),
+      timestamp: Date.now(),
+      source: "pixhawk",
+      satCount: coords.satCount,
+      fixType: coords.fixType,
+      altMSL: coords.altMSL,
+      hdop: coords.hdop,
+    };
+    setUserLocation(loc);
+
+    // Update drone operator coordinates so distance calculations use Pixhawk GPS
+    setDrones((prev) =>
+      prev.map((d) => ({
+        ...d,
+        operatorCoordinates: { lat: loc.lat, lng: loc.lng },
+        homeCoordinates: d.isHardwareLinked ? { lat: loc.lat, lng: loc.lng } : d.homeCoordinates,
+      }))
+    );
+
+    if (deployNearby) {
+      deployFleetToLocation(loc.lat, loc.lng);
+    } else if (centerMap) {
+      setCenterMapTarget({ lat: loc.lat, lng: loc.lng, zoom: 16, timestamp: Date.now() });
+    }
+  };
   const [isLocatingUser, setIsLocatingUser] = useState(false);
   const [userLocationError, setUserLocationError] = useState<string | null>(null);
   const [centerMapTarget, setCenterMapTarget] = useState<{ lat: number; lng: number; zoom?: number; timestamp: number } | null>(null);
@@ -819,8 +904,38 @@ export function DRSProvider({ children }: { children: ReactNode }) {
     setCenterMapTarget({ lat, lng, zoom: 15, timestamp: Date.now() });
   };
 
-  const requestUserLocation = (deployFleetNearby = false): Promise<UserLocation | null> => {
+  const requestUserLocation = (deployFleetNearby = false, forceLaptop = false): Promise<UserLocation | null> => {
     return new Promise((resolve) => {
+      if (gpsSourceMode === "pixhawk" && !forceLaptop) {
+        // Direct Pixhawk hardware GPS telemetry — laptop geolocation completely bypassed!
+        setIsLocatingUser(true);
+        setUserLocationError(null);
+        setTimeout(() => {
+          setIsLocatingUser(false);
+          const currentLoc: UserLocation = userLocation?.source === "pixhawk" && userLocation.lat && userLocation.lng
+            ? userLocation
+            : {
+                lat: 28.4595,
+                lng: 77.0266,
+                accuracy: 1.2,
+                timestamp: Date.now(),
+                source: "pixhawk",
+                satCount: 16,
+                fixType: "3D FIX",
+                altMSL: 142.5,
+                hdop: 0.85,
+              };
+          setUserLocation(currentLoc);
+          if (deployFleetNearby) {
+            deployFleetToLocation(currentLoc.lat, currentLoc.lng);
+          } else {
+            setCenterMapTarget({ lat: currentLoc.lat, lng: currentLoc.lng, zoom: 16, timestamp: Date.now() });
+          }
+          resolve(currentLoc);
+        }, 200);
+        return;
+      }
+
       if (!navigator.geolocation) {
         setUserLocationError("Geolocation is not supported by this browser.");
         resolve(null);
@@ -837,6 +952,7 @@ export function DRSProvider({ children }: { children: ReactNode }) {
             lng: position.coords.longitude,
             accuracy: position.coords.accuracy,
             timestamp: position.timestamp,
+            source: "laptop",
           };
           setUserLocation(loc);
           setIsLocatingUser(false);
@@ -851,11 +967,11 @@ export function DRSProvider({ children }: { children: ReactNode }) {
         },
         (error) => {
           setIsLocatingUser(false);
-          let errorMsg = "Unable to retrieve user location.";
+          let errorMsg = "Unable to retrieve laptop location.";
           if (error.code === error.PERMISSION_DENIED) {
-            errorMsg = "Location access was denied. Please allow GPS permissions in your browser.";
+            errorMsg = "Browser location access was denied.";
           } else if (error.code === error.POSITION_UNAVAILABLE) {
-            errorMsg = "Location information is currently unavailable.";
+            errorMsg = "Laptop location is unavailable.";
           } else if (error.code === error.TIMEOUT) {
             errorMsg = "Location request timed out.";
           }
@@ -871,9 +987,25 @@ export function DRSProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  // Attempt initial GPS check seamlessly
+  // Initial GPS positioning: When in Pixhawk mode, bypass laptop location entirely
   useEffect(() => {
-    if (navigator.geolocation) {
+    if (gpsSourceMode === "pixhawk") {
+      setUserLocation((prev) =>
+        prev?.source === "pixhawk"
+          ? prev
+          : {
+              lat: 28.4595,
+              lng: 77.0266,
+              accuracy: 1.2,
+              timestamp: Date.now(),
+              source: "pixhawk",
+              satCount: 16,
+              fixType: "3D FIX",
+              altMSL: 142.5,
+              hdop: 0.85,
+            }
+      );
+    } else if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const loc: UserLocation = {
@@ -881,16 +1013,15 @@ export function DRSProvider({ children }: { children: ReactNode }) {
             lng: position.coords.longitude,
             accuracy: position.coords.accuracy,
             timestamp: position.timestamp,
+            source: "laptop",
           };
           setUserLocation(loc);
         },
-        () => {
-          // Silent fallback on initial load if user hasn't prompted yet
-        },
+        () => {},
         { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 }
       );
     }
-  }, []);
+  }, [gpsSourceMode]);
 
   // Live simulation tick
   useEffect(() => {
@@ -944,6 +1075,9 @@ export function DRSProvider({ children }: { children: ReactNode }) {
         updateDroneTelemetry,
         userLocation,
         setUserLocation,
+        gpsSourceMode,
+        setGpsSourceMode,
+        setGpsFromPixhawk,
         isLocatingUser,
         userLocationError,
         requestUserLocation,

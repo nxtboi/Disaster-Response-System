@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from "react";
 import { DRSProvider, useDRS } from "./store";
+import { PixhawkProvider } from "./lib/PixhawkContext";
 import { LoginPage } from "./components/LoginPage";
 import { LandingPage } from "./components/LandingPage";
 import { Dashboard } from "./components/Dashboard";
@@ -157,7 +158,9 @@ function AppContent() {
 export default function App() {
   return (
     <DRSProvider>
-      <AppContent />
+      <PixhawkProvider>
+        <AppContent />
+      </PixhawkProvider>
     </DRSProvider>
   );
 }

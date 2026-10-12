@@ -17,7 +17,9 @@ import {
   Gauge,
 } from "lucide-react";
 import { useDRS } from "../store";
+import { usePixhawk } from "../lib/PixhawkContext";
 import { cn } from "../lib/utils";
+import { Compass } from "lucide-react";
 
 const PRESET_BAUDS = [
   { rate: 256000, label: "256,000 BAUD (Pixhawk / Fast)" },
@@ -45,7 +47,20 @@ export function UsbSerialPanel() {
     setSelectedDroneId,
     drones,
     setActiveView,
+    gpsSourceMode,
+    setGpsSourceMode,
   } = useDRS();
+
+  const {
+    pixhawk,
+    connectSerial: connectPixhawkSerial,
+    disconnectSerial: disconnectPixhawkSerial,
+    startSimulation: startPixhawkSim,
+    syncSystemGpsToPixhawk,
+  } = usePixhawk();
+
+  const isPixhawkActive = pixhawk.serial.connected;
+  const isAnyConnected = serialConnected || isPixhawkActive;
 
   const [customBaud, setCustomBaud] = useState<string>("");
   const [isCustomMode, setIsCustomMode] = useState(false);
@@ -61,7 +76,7 @@ export function UsbSerialPanel() {
     setIsConnecting(true);
     setConnectError(null);
     try {
-      const res = await connectSerial(activeBaud);
+      const res = await connectPixhawkSerial(activeBaud);
       if (!res.success && res.error) {
         setConnectError(res.error);
       }
@@ -71,7 +86,12 @@ export function UsbSerialPanel() {
   };
 
   const handleDisconnect = async () => {
-    await disconnectSerial();
+    if (isPixhawkActive) {
+      await disconnectPixhawkSerial();
+    }
+    if (serialConnected) {
+      await disconnectSerial();
+    }
     setConnectError(null);
   };
 
@@ -100,10 +120,10 @@ export function UsbSerialPanel() {
           </div>
         </div>
 
-        {serialConnected ? (
+        {isAnyConnected ? (
           <span className="flex items-center gap-1.5 text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full animate-pulse shadow-sm">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-            CONNECTED
+            {isPixhawkActive ? (pixhawk.serial.isSimulated ? "SITL SIM" : "PIXHAWK") : "CONNECTED"}
           </span>
         ) : (
           <span className="text-[10px] font-mono text-zinc-500 bg-zinc-950/80 border border-zinc-800 px-2 py-0.5 rounded-full">
@@ -132,24 +152,73 @@ export function UsbSerialPanel() {
       </div>
 
       {/* Connected State Display */}
-      {serialConnected ? (
+      {isAnyConnected ? (
         <div className="flex flex-col gap-2 pt-1">
           <div className="grid grid-cols-2 gap-1.5 bg-zinc-950/80 border border-zinc-800 rounded-lg p-2 font-mono text-[11px]">
             <div className="flex flex-col">
-              <span className="text-[9px] uppercase tracking-wider text-zinc-500">Baud Rate</span>
-              <span className="text-zinc-200 font-bold text-xs">{serialBaudRate.toLocaleString()}</span>
+              <span className="text-[9px] uppercase tracking-wider text-zinc-500">Hardware Link</span>
+              <span className="text-zinc-200 font-bold text-xs">
+                {isPixhawkActive ? pixhawk.telemetry.flightMode : `${serialBaudRate.toLocaleString()} BAUD`}
+              </span>
             </div>
             <div className="flex flex-col">
               <span className="text-[9px] uppercase tracking-wider text-zinc-500">Packets RX</span>
               <span className="text-emerald-400 font-bold text-xs flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
-                {serialRxCount} pkts
+                {isPixhawkActive ? `${pixhawk.serial.rxPackets} pkts` : `${serialRxCount} pkts`}
               </span>
             </div>
           </div>
 
-          {/* Quick Realtime Snapshot if available */}
-          {lastSerialPacket && (
+          {/* Pixhawk Live Compass & GPS Snapshot */}
+          {isPixhawkActive ? (
+            <div className="bg-cyan-500/5 border border-cyan-500/20 rounded-lg p-2.5 flex flex-col gap-1.5 font-mono text-[10px]">
+              <div className="flex justify-between items-center text-zinc-400 text-[9px] uppercase border-b border-zinc-800/80 pb-1">
+                <span className="text-cyan-300 font-bold flex items-center gap-1">
+                  <Compass className="w-3 h-3 text-cyan-400" />
+                  Pixhawk Compass & GPS
+                </span>
+                <span className="text-emerald-400 font-bold">{pixhawk.gps.fixType}</span>
+              </div>
+              <div className="grid grid-cols-3 gap-1 text-center pt-0.5">
+                <div className="bg-zinc-900/80 rounded px-1 py-1">
+                  <span className="text-zinc-500 block text-[8px]">HEADING</span>
+                  <span className="text-cyan-300 font-bold">{Math.round(pixhawk.compass.headingDeg)}°</span>
+                </div>
+                <div className="bg-zinc-900/80 rounded px-1 py-1">
+                  <span className="text-zinc-500 block text-[8px]">SATS LOCK</span>
+                  <span className="text-emerald-400 font-bold">{pixhawk.gps.satCount} Sats</span>
+                </div>
+                <div className="bg-zinc-900/80 rounded px-1 py-1">
+                  <span className="text-zinc-500 block text-[8px]">BATTERY</span>
+                  <span className="text-amber-300 font-bold">{pixhawk.telemetry.batteryPercent}%</span>
+                </div>
+              </div>
+              <div className="flex justify-between text-[9px] text-zinc-400 pt-0.5">
+                <span>Lat: {pixhawk.gps.lat.toFixed(4)}°</span>
+                <span>Lng: {pixhawk.gps.lng.toFixed(4)}°</span>
+                <span>Alt: {pixhawk.gps.altAGL}m</span>
+              </div>
+              <div className="flex items-center justify-between pt-1 border-t border-zinc-800/80">
+                <span className="text-[8px] text-zinc-500 uppercase">System GPS:</span>
+                <button
+                  onClick={() => {
+                    setGpsSourceMode("pixhawk");
+                    syncSystemGpsToPixhawk(true);
+                  }}
+                  className={cn(
+                    "text-[8px] px-1.5 py-0.5 rounded font-bold transition-all",
+                    gpsSourceMode === "pixhawk"
+                      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                      : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+                  )}
+                  title="Source system and map GPS from Pixhawk (Laptop bypassed)"
+                >
+                  {gpsSourceMode === "pixhawk" ? "✓ LOCKED TO PIXHAWK" : "SYNC PIXHAWK GPS"}
+                </button>
+              </div>
+            </div>
+          ) : lastSerialPacket ? (
             <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-2 flex flex-col gap-1 font-mono text-[10px]">
               <div className="flex justify-between text-zinc-400 text-[9px] uppercase">
                 <span>Latest Telemetry RX</span>
@@ -170,17 +239,17 @@ export function UsbSerialPanel() {
                 </div>
               </div>
             </div>
-          )}
+          ) : null}
 
           {/* Action Row */}
           <div className="flex items-center gap-1.5 pt-1">
             <button
-              onClick={simulateSerialPacket}
-              className="flex-1 flex items-center justify-center gap-1 py-1.5 px-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 rounded text-[11px] font-mono font-semibold transition-all"
-              title="Inject test telemetry packet"
+              onClick={() => setActiveView("Hardware")}
+              className="flex-1 flex items-center justify-center gap-1 py-1.5 px-2 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 rounded text-[11px] font-mono font-semibold transition-all"
+              title="Open full Pixhawk PFD Cockpit"
             >
-              <Zap className="w-3 h-3 text-amber-400" />
-              <span>Sim Pulse</span>
+              <Activity className="w-3 h-3 text-cyan-400" />
+              <span>Open Cockpit</span>
             </button>
 
             <button
@@ -257,18 +326,29 @@ export function UsbSerialPanel() {
             className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/50 hover:border-cyan-400 text-cyan-300 hover:text-cyan-100 rounded-lg text-xs font-mono font-bold tracking-wider transition-all shadow-[0_0_12px_rgba(6,182,212,0.15)] disabled:opacity-50"
           >
             <LinkIcon className="w-3.5 h-3.5" />
-            <span>{isConnecting ? "CONNECTING..." : "CONNECT USB DEVICE"}</span>
+            <span>{isConnecting ? "CONNECTING..." : "CONNECT PIXHAWK USB / RADIO"}</span>
           </button>
 
           {/* Test Simulation Button */}
-          <button
-            onClick={simulateSerialPacket}
-            className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-300 rounded text-[11px] font-mono transition-colors"
-            title="Test USB telemetry parsing without physical hardware plugged in"
-          >
-            <Zap className="w-3 h-3 text-amber-400" />
-            <span>Test Telemetry Stream</span>
-          </button>
+          <div className="flex gap-1.5">
+            <button
+              onClick={startPixhawkSim}
+              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 rounded text-[11px] font-mono transition-colors font-semibold"
+              title="Test live Pixhawk GPS, Compass & MAVLink packets without hardware plugged in"
+            >
+              <Zap className="w-3 h-3 text-amber-400" />
+              <span>Pixhawk SITL Sim</span>
+            </button>
+
+            <button
+              onClick={() => setActiveView("Hardware")}
+              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-cyan-300 rounded text-[11px] font-mono transition-colors"
+              title="Open full Pixhawk PFD Cockpit & Flight Station"
+            >
+              <Activity className="w-3 h-3 text-cyan-400" />
+              <span>Full Cockpit</span>
+            </button>
+          </div>
 
           {/* Error Message if any */}
           {connectError && (

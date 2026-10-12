@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
 import { useDRS } from '../store';
+import { usePixhawk } from '../lib/PixhawkContext';
 import {
   Crosshair,
   LocateFixed,
@@ -25,6 +26,8 @@ import {
   Globe,
   Mountain,
   Compass as CompassIcon,
+  Satellite,
+  Laptop,
 } from 'lucide-react';
 
 interface FreeTacticalMapProps {
@@ -203,7 +206,10 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
     addWaypoint,
     removeWaypoint,
     sendDroneToWaypoint,
+    gpsSourceMode,
+    setGpsSourceMode,
   } = useDRS();
+  const { pixhawk, syncSystemGpsToPixhawk } = usePixhawk();
 
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -462,20 +468,19 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
 
     if (userLocation) {
       const userLatLng: [number, number] = [userLocation.lat, userLocation.lng];
+      const isPixhawkGps = userLocation.source === "pixhawk";
 
       const userIcon = L.divIcon({
         className: 'drs-user-location-icon',
         html: `
           <div class="relative w-12 h-12 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-auto">
-            <div class="absolute inset-0 bg-blue-500/30 rounded-full animate-ping"></div>
-            <div class="absolute inset-1.5 bg-cyan-400/25 rounded-full animate-pulse border border-cyan-400/80"></div>
-            <div class="w-7 h-7 rounded-full bg-blue-600 text-white border-2 border-white shadow-[0_0_18px_rgba(59,130,246,0.9)] flex items-center justify-center z-10">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-                <circle cx="12" cy="12" r="10"></circle>
-              </svg>
+            <div class="absolute inset-0 ${isPixhawkGps ? 'bg-emerald-500/40' : 'bg-blue-500/30'} rounded-full animate-ping"></div>
+            <div class="absolute inset-1.5 ${isPixhawkGps ? 'bg-emerald-400/30 border-2 border-emerald-400' : 'bg-cyan-400/25 border border-cyan-400/80'} rounded-full animate-pulse shadow-[0_0_15px_rgba(16,185,129,0.5)]"></div>
+            <div class="w-7 h-7 rounded-full ${isPixhawkGps ? 'bg-emerald-600 shadow-[0_0_20px_rgba(16,185,129,1)]' : 'bg-blue-600 shadow-[0_0_18px_rgba(59,130,246,0.9)]'} text-white border-2 border-white flex items-center justify-center z-10 text-xs">
+              ${isPixhawkGps ? '🛰️' : `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="10"></circle></svg>`}
             </div>
-            <div class="absolute -bottom-5 whitespace-nowrap px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-zinc-950 text-blue-300 border border-blue-500/70 shadow-lg">
-              YOU (OPERATOR)
+            <div class="absolute -bottom-5 whitespace-nowrap px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-zinc-950 ${isPixhawkGps ? 'text-emerald-300 border border-emerald-500/80 shadow-[0_0_10px_rgba(16,185,129,0.4)]' : 'text-blue-300 border border-blue-500/70 shadow-lg'}">
+              ${isPixhawkGps ? '🛰️ PIXHAWK FLIGHT GPS' : 'YOU (OPERATOR)'}
             </div>
           </div>
         `,
@@ -487,13 +492,16 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
         const marker = L.marker(userLatLng, { icon: userIcon, zIndexOffset: 2000 }).addTo(map);
         marker.bindPopup(`
           <div class="font-mono text-xs text-zinc-200">
-            <div class="font-bold text-blue-400 flex items-center gap-1.5 border-b border-zinc-800 pb-1 mb-1.5">
-              <span>OPERATOR GROUND COMMAND</span>
+            <div class="font-bold ${isPixhawkGps ? 'text-emerald-400' : 'text-blue-400'} flex items-center gap-1.5 border-b border-zinc-800 pb-1 mb-1.5">
+              <span>${isPixhawkGps ? '🛰️ PIXHAWK HARDWARE GPS FIX' : 'OPERATOR GROUND COMMAND'}</span>
             </div>
             <div class="text-[11px] text-zinc-300 space-y-1">
-              <div><span class="text-zinc-500">LAT:</span> ${userLocation.lat.toFixed(5)}</div>
-              <div><span class="text-zinc-500">LNG:</span> ${userLocation.lng.toFixed(5)}</div>
-              ${userLocation.accuracy ? `<div><span class="text-zinc-500">ACCURACY:</span> ±${Math.round(userLocation.accuracy)}m</div>` : ''}
+              <div><span class="text-zinc-500">SOURCE:</span> <strong class="${isPixhawkGps ? 'text-emerald-300' : 'text-blue-300'}">${isPixhawkGps ? 'Pixhawk MAVLink (Laptop Bypassed)' : 'Laptop Geolocation'}</strong></div>
+              <div><span class="text-zinc-500">LAT:</span> ${userLocation.lat.toFixed(6)}°</div>
+              <div><span class="text-zinc-500">LNG:</span> ${userLocation.lng.toFixed(6)}°</div>
+              ${userLocation.fixType ? `<div><span class="text-zinc-500">FIX:</span> ${userLocation.fixType} (${userLocation.satCount || 16} Sats)</div>` : ''}
+              ${userLocation.altMSL ? `<div><span class="text-zinc-500">ALT:</span> ${userLocation.altMSL}m MSL</div>` : ''}
+              ${userLocation.accuracy ? `<div><span class="text-zinc-500">PRECISION:</span> ±${Math.round(userLocation.accuracy)}m</div>` : ''}
             </div>
           </div>
         `, { className: 'drs-popup', closeButton: false });
@@ -504,11 +512,12 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
       }
 
       if (userLocation.accuracy && userLocation.accuracy < 2000) {
+        const ringColor = isPixhawkGps ? '#10b981' : '#3b82f6';
         if (!userAccuracyCircleRef.current) {
           userAccuracyCircleRef.current = L.circle(userLatLng, {
             radius: userLocation.accuracy,
-            color: '#3b82f6',
-            fillColor: '#3b82f6',
+            color: ringColor,
+            fillColor: ringColor,
             fillOpacity: 0.1,
             weight: 1.5,
             dashArray: '3, 6',
@@ -516,6 +525,7 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
         } else {
           userAccuracyCircleRef.current.setLatLng(userLatLng);
           userAccuracyCircleRef.current.setRadius(userLocation.accuracy);
+          userAccuracyCircleRef.current.setStyle({ color: ringColor, fillColor: ringColor });
         }
       }
     } else {
@@ -879,7 +889,22 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
 
   const handleLocateUser = async (deployNearby = false) => {
     setIsTracking(false);
-    const loc = await requestUserLocation(deployNearby);
+    if (gpsSourceMode === "pixhawk") {
+      syncSystemGpsToPixhawk(false);
+      const targetLat = userLocation?.lat || pixhawk.gps.lat;
+      const targetLng = userLocation?.lng || pixhawk.gps.lng;
+      if (deployNearby) {
+        deployFleetToLocation(targetLat, targetLng);
+      }
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.flyTo([targetLat, targetLng], 16, { duration: 1.2 });
+        setLocationSuccessToast(true);
+        setTimeout(() => setLocationSuccessToast(false), 4000);
+      }
+      return;
+    }
+
+    const loc = await requestUserLocation(deployNearby, true);
     if (loc && mapInstanceRef.current) {
       mapInstanceRef.current.flyTo([loc.lat, loc.lng], 16, { duration: 1.2 });
       setLocationSuccessToast(true);
@@ -1084,19 +1109,32 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
 
         {/* User GPS Status Pill */}
         {userLocation && (
-          <div className="bg-zinc-950/90 backdrop-blur-md border border-blue-500/40 px-3 py-1.5 rounded-lg shadow-xl flex items-center justify-between gap-2 text-[11px] font-mono text-zinc-300">
-            <div className="flex items-center gap-1.5 text-blue-400 font-bold">
-              <MapPin className="w-3.5 h-3.5 animate-bounce" />
-              <span>GPS: {userLocation.lat.toFixed(4)}, {userLocation.lng.toFixed(4)}</span>
+          <div className={`bg-zinc-950/90 backdrop-blur-md border ${userLocation.source === 'pixhawk' ? 'border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'border-blue-500/40'} px-3 py-1.5 rounded-lg shadow-xl flex items-center justify-between gap-2 text-[11px] font-mono text-zinc-300`}>
+            <div className={`flex items-center gap-1.5 ${userLocation.source === 'pixhawk' ? 'text-emerald-400' : 'text-blue-400'} font-bold`}>
+              {userLocation.source === 'pixhawk' ? (
+                <Satellite className="w-3.5 h-3.5 animate-pulse text-emerald-400" />
+              ) : (
+                <MapPin className="w-3.5 h-3.5 animate-bounce" />
+              )}
+              <span>
+                {userLocation.source === 'pixhawk' ? 'PIXHAWK GPS:' : 'GPS:'} {userLocation.lat.toFixed(4)}, {userLocation.lng.toFixed(4)}
+              </span>
+              {userLocation.source === 'pixhawk' && (
+                <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  {userLocation.fixType || '3D FIX'}
+                </span>
+              )}
             </div>
-            <button
-              onClick={() => handleLocateUser(true)}
-              className="text-[10px] bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 px-2 py-0.5 rounded border border-blue-500/40 transition-colors flex items-center gap-1"
-              title="Spawn patrol fleet around your real-time coordinates"
-            >
-              <PlaneTakeoff className="w-3 h-3" />
-              <span>Deploy Fleet</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => handleLocateUser(true)}
+                className={`text-[10px] ${userLocation.source === 'pixhawk' ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border-emerald-500/40' : 'bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border-blue-500/40'} px-2 py-0.5 rounded border transition-colors flex items-center gap-1`}
+                title="Spawn patrol fleet around these GPS coordinates"
+              >
+                <PlaneTakeoff className="w-3 h-3" />
+                <span>Deploy Fleet</span>
+              </button>
+            </div>
           </div>
         )}
 
@@ -1300,12 +1338,22 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
         <button
           onClick={() => handleLocateUser(false)}
           disabled={isLocatingUser}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-mono text-xs font-bold transition-all shadow-xl backdrop-blur-md border bg-blue-600/30 text-blue-300 border-blue-500/60 hover:bg-blue-600/50 hover:border-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.3)]"
+          className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-mono text-xs font-bold transition-all shadow-xl backdrop-blur-md border ${
+            gpsSourceMode === 'pixhawk'
+              ? 'bg-emerald-600/30 text-emerald-300 border-emerald-500/60 hover:bg-emerald-600/50 hover:border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.3)]'
+              : 'bg-blue-600/30 text-blue-300 border-blue-500/60 hover:bg-blue-600/50 hover:border-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.3)]'
+          }`}
+          title={gpsSourceMode === 'pixhawk' ? 'Center map on Pixhawk GPS (Laptop bypassed)' : 'Center map on Laptop location'}
         >
           {isLocatingUser ? (
             <>
-              <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
+              <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
               <span>ACQUIRING GPS FIX...</span>
+            </>
+          ) : gpsSourceMode === 'pixhawk' ? (
+            <>
+              <Satellite className="w-4 h-4 text-emerald-400 animate-pulse" />
+              <span>RE-CENTER ON PIXHAWK GPS</span>
             </>
           ) : (
             <>

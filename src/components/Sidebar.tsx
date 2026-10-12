@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useDRS } from "../store";
+import { usePixhawk } from "../lib/PixhawkContext";
 import { cn } from "../lib/utils";
 import { 
   Crosshair, Navigation, Video, Activity,
@@ -16,7 +17,7 @@ const NAV_ITEMS = [
   { id: "Missions", icon: Target, label: "Autonomous Missions" },
   { id: "TinyFish Intel", icon: CloudSun, label: "Weather & Disaster News" },
   { id: "Alerts", icon: AlertTriangle, label: "Alerts" },
-  { id: "Hardware", icon: Cpu, label: "Hardware Link" },
+  { id: "Hardware", icon: Cpu, label: "Pixhawk & Serial Telemetry" },
 ];
 
 const PRESET_ROLES = [
@@ -77,6 +78,7 @@ export function Sidebar({
     removeDrone,
     userLocation
   } = useDRS();
+  const { pixhawk } = usePixhawk();
 
   // State for Add Drone Modal
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -179,14 +181,22 @@ export function Sidebar({
                   key={item.id}
                   onClick={() => setActiveView(item.id)}
                   className={cn(
-                    "flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 group text-sm font-medium tracking-wide",
+                    "flex items-center justify-between px-3 py-2 rounded-lg transition-all duration-200 group text-sm font-medium tracking-wide",
                     isActive 
                       ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20" 
                       : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200 border border-transparent"
                   )}
                 >
-                  <Icon className={cn("w-4 h-4", isActive ? "text-cyan-400" : "text-zinc-500 group-hover:text-zinc-400")} />
-                  {item.label}
+                  <div className="flex items-center gap-3">
+                    <Icon className={cn("w-4 h-4", isActive ? "text-cyan-400" : "text-zinc-500 group-hover:text-zinc-400")} />
+                    <span>{item.label}</span>
+                  </div>
+                  {item.id === "Hardware" && pixhawk.serial.connected && (
+                    <span className="flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                      LIVE
+                    </span>
+                  )}
                 </button>
               );
             })}

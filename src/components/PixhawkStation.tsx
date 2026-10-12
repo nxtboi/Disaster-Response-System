@@ -38,6 +38,8 @@ import {
   AlertCircle,
   Info,
   Cable,
+  FlipHorizontal,
+  Map,
 } from "lucide-react";
 import { usePixhawk } from "../lib/PixhawkContext";
 import { getDeviceDescription } from "../lib/pixhawkManager";
@@ -98,8 +100,11 @@ export function PixhawkStation() {
   const [connectError, setConnectError] = useState<string | null>(null);
   const [customBaudInput, setCustomBaudInput] = useState<string>("");
   const [searchFilter, setSearchFilter] = useState<string>("");
+  const [invertRoll, setInvertRoll] = useState<boolean>(false);
 
   const { serial, gps, compass, telemetry, statusLogs, recentPackets } = pixhawk;
+  // Effective roll respecting user flip toggle and standard attitude horizon convention
+  const effectiveRollDeg = invertRoll ? -compass.rollDeg : compass.rollDeg;
 
   const handleConnect = async (unfiltered = true) => {
     setIsConnecting(true);
@@ -424,8 +429,22 @@ export function PixhawkStation() {
                 <Activity className="w-3.5 h-3.5 text-cyan-400" />
                 Attitude Gyro & Artificial Horizon (PFD)
               </span>
-              <div className="flex items-center gap-2 font-mono text-[11px]">
-                <span className="text-zinc-400">ROLL: <strong className="text-cyan-300">{compass.rollDeg > 0 ? `+${compass.rollDeg}` : compass.rollDeg}°</strong></span>
+              <div className="flex items-center gap-2.5 font-mono text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => setInvertRoll((prev) => !prev)}
+                  className={cn(
+                    "flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border transition-all",
+                    invertRoll
+                      ? "bg-amber-500/20 border-amber-500/50 text-amber-300 shadow-[0_0_8px_rgba(245,158,11,0.3)]"
+                      : "bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-zinc-200"
+                  )}
+                  title="Toggle / Flip Roll axis direction if roll horizon banks opposite to aircraft attitude"
+                >
+                  <FlipHorizontal className="w-3 h-3" />
+                  <span>{invertRoll ? "ROLL FLIPPED" : "FLIP ROLL"}</span>
+                </button>
+                <span className="text-zinc-400">ROLL: <strong className={invertRoll ? "text-amber-300" : "text-cyan-300"}>{effectiveRollDeg > 0 ? `+${effectiveRollDeg}` : effectiveRollDeg}°</strong></span>
                 <span className="text-zinc-400">PITCH: <strong className="text-cyan-300">{compass.pitchDeg > 0 ? `+${compass.pitchDeg}` : compass.pitchDeg}°</strong></span>
               </div>
             </div>
@@ -436,7 +455,7 @@ export function PixhawkStation() {
               <div
                 className="absolute w-[200%] h-[200%] transition-transform duration-100 ease-linear pointer-events-none"
                 style={{
-                  transform: `rotate(${-compass.rollDeg}deg) translateY(${compass.pitchDeg * 2.4}px)`,
+                  transform: `rotate(${-effectiveRollDeg}deg) translateY(${compass.pitchDeg * 2.4}px)`,
                 }}
               >
                 {/* Sky (Top Half) */}
@@ -474,8 +493,13 @@ export function PixhawkStation() {
               </div>
 
               {/* Top Banking Scale Arc */}
-              <div className="absolute top-2 inset-x-0 flex justify-center text-[9px] font-mono text-white/90 font-bold drop-shadow">
-                <span>ROLL ANGLE: {compass.rollDeg > 0 ? `+${compass.rollDeg}` : compass.rollDeg}°</span>
+              <div className="absolute top-2 inset-x-0 flex items-center justify-center gap-2 text-[9px] font-mono text-white/90 font-bold drop-shadow">
+                <span>ROLL: {effectiveRollDeg > 0 ? `+${effectiveRollDeg}` : effectiveRollDeg}°</span>
+                {invertRoll && (
+                  <span className="px-1.5 py-0.2 rounded bg-amber-500/80 text-black text-[8px] font-black uppercase">
+                    FLIPPED
+                  </span>
+                )}
               </div>
 
               {/* Speed Tape on Left */}
@@ -606,6 +630,65 @@ export function PixhawkStation() {
                 <span className="text-[9px] text-zinc-500 uppercase block">Mag Z</span>
                 <span className="text-cyan-400 font-bold text-xs">{compass.zMag} mG</span>
               </div>
+            </div>
+          </div>
+
+          {/* Integrated Live Pixhawk Map & Coordinates Bar (Full Width, 12 cols) */}
+          <div className="lg:col-span-12 bg-zinc-900/60 border border-cyan-500/30 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-[0_0_20px_rgba(6,182,212,0.08)]">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-400">
+                <Satellite className="w-5 h-5 animate-pulse" />
+              </div>
+              <div className="flex flex-col">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono font-bold tracking-wider uppercase text-zinc-100 flex items-center gap-1.5">
+                    <Map className="w-4 h-4 text-cyan-400" />
+                    Pixhawk Hardware Live GPS Map Fix
+                  </span>
+                  <span className={cn(
+                    "text-[10px] font-mono font-bold px-2 py-0.5 rounded border",
+                    gps.fixTypeCode >= 3
+                      ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300"
+                      : "bg-amber-500/20 border-amber-500/50 text-amber-300"
+                  )}>
+                    {gps.fixType} ({gps.satCount} SATS • HDOP {gps.hdop})
+                  </span>
+                </div>
+                <div className="text-xs font-mono text-zinc-300 mt-0.5 flex flex-wrap items-center gap-x-4 gap-y-1">
+                  <span>LAT: <strong className="text-cyan-300">{gps.lat.toFixed(6)}°</strong></span>
+                  <span>LNG: <strong className="text-cyan-300">{gps.lng.toFixed(6)}°</strong></span>
+                  <span>ALT: <strong className="text-zinc-100">{gps.altAGL}m AGL</strong></span>
+                  <span>SPEED: <strong className="text-zinc-100">{gps.groundspeedKmh} km/h</strong></span>
+                  <span>HEADING: <strong className="text-zinc-100">{Math.round(compass.headingDeg)}°</strong></span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap shrink-0">
+              <button
+                onClick={() => {
+                  syncSystemGpsToPixhawk(true);
+                  setActiveView("Dashboard");
+                }}
+                className="px-3.5 py-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/60 text-emerald-300 font-mono text-xs font-bold flex items-center gap-1.5 transition-all shadow-[0_0_12px_rgba(16,185,129,0.2)] active:scale-95"
+                title="Open main tactical live map centered on Pixhawk coordinates"
+              >
+                <Locate className="w-4 h-4 text-emerald-400" />
+                <span>Center & View on Full Tactical Map</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  syncSystemGpsToPixhawk(false);
+                  deployFleetToLocation(gps.lat, gps.lng);
+                  setActiveView("Dashboard");
+                }}
+                className="px-3 py-2 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-300 font-mono text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95"
+                title="Deploy drones to Pixhawk location and switch to Map"
+              >
+                <PlaneTakeoff className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Deploy Fleet to Pixhawk</span>
+              </button>
             </div>
           </div>
         </div>

@@ -448,6 +448,35 @@ export function FreeTacticalMap({ onRecenter }: FreeTacticalMapProps) {
     applyTileLayer(tileStyle, mapInstanceRef.current);
   }, [tileStyle, applyTileLayer]);
 
+  // Ensure map is visible and invalidateSize runs whenever container sizes change or component mounts
+  useEffect(() => {
+    const timer1 = setTimeout(() => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.invalidateSize();
+      }
+    }, 200);
+    const timer2 = setTimeout(() => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.invalidateSize();
+      }
+    }, 600);
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+    };
+  }, []);
+
+  // When Pixhawk connects or changes GPS while in Pixhawk mode, ensure map centers on Pixhawk GPS if not manual panning
+  useEffect(() => {
+    if (pixhawk.serial.connected && pixhawk.gps.lat && pixhawk.gps.lng && mapInstanceRef.current) {
+      mapInstanceRef.current.invalidateSize();
+      // If user hasn't started manual tracking another object, center to Pixhawk fix
+      if (gpsSourceMode === "pixhawk" && !centerMapTarget) {
+        mapInstanceRef.current.panTo([pixhawk.gps.lat, pixhawk.gps.lng], { animate: true, duration: 0.8 });
+      }
+    }
+  }, [pixhawk.serial.connected, pixhawk.gps.lat, pixhawk.gps.lng, gpsSourceMode, centerMapTarget]);
+
   // Center on centerMapTarget when triggered
   useEffect(() => {
     if (centerMapTarget && mapInstanceRef.current) {

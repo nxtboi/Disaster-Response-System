@@ -149,3 +149,36 @@ export const INITIAL_PIXHAWK_STATE: PixhawkState = {
   ],
   recentPackets: [],
 };
+
+export interface KnownAutopilotHardware {
+  usbVendorId: number;
+  usbProductId?: number;
+  manufacturer: string;
+  deviceType: string;
+}
+
+export const KNOWN_PIXHAWK_DEVICES: KnownAutopilotHardware[] = [
+  { usbVendorId: 0x26ac, manufacturer: "3DR / mRo", deviceType: "Pixhawk 1 / PX4 FMU" },
+  { usbVendorId: 0x0483, manufacturer: "STMicroelectronics", deviceType: "Pixhawk Virtual COM / STM32 Bootloader" },
+  { usbVendorId: 0x3162, manufacturer: "Holybro", deviceType: "Pixhawk 4 / 5X / 6X / 6C / Kakute" },
+  { usbVendorId: 0x2dae, manufacturer: "CubePilot / Hex", deviceType: "Cube Black / Orange / Yellow / Purple" },
+  { usbVendorId: 0x1209, manufacturer: "ArduPilot / Generic", deviceType: "ArduPilot ChibiOS / PX4 Autopilot" },
+  { usbVendorId: 0x10c4, manufacturer: "Silicon Labs", deviceType: "CP210x Telemetry Radio (SiK 433/915MHz)" },
+  { usbVendorId: 0x0403, manufacturer: "FTDI", deviceType: "FT232 / FTDI Telemetry Radio Bridge" },
+  { usbVendorId: 0x1a86, manufacturer: "WCH", deviceType: "CH340 / CH341 Telemetry / Pixhawk Clone" },
+  { usbVendorId: 0x067b, manufacturer: "Prolific", deviceType: "PL2303 Serial USB Adapter" },
+  { usbVendorId: 0x303a, manufacturer: "Espressif", deviceType: "ESP32 MAVLink WiFi / USB Bridge" },
+  { usbVendorId: 0x2e8a, manufacturer: "Raspberry Pi", deviceType: "RP2040 / Pico Flight Companion" },
+  { usbVendorId: 0x2341, manufacturer: "Arduino", deviceType: "Arduino Autopilot / Mega 2560" },
+];
+
+export function getDeviceDescription(info: { usbVendorId?: number; usbProductId?: number }): string {
+  if (!info.usbVendorId) return "Generic Serial / COM Port";
+  const match = KNOWN_PIXHAWK_DEVICES.find((d) => d.usbVendorId === info.usbVendorId);
+  const vidHex = `0x${info.usbVendorId.toString(16).toUpperCase().padStart(4, "0")}`;
+  const pidHex = info.usbProductId ? `0x${info.usbProductId.toString(16).toUpperCase().padStart(4, "0")}` : null;
+  if (match) {
+    return `${match.manufacturer} - ${match.deviceType} [VID ${vidHex}${pidHex ? ` : PID ${pidHex}` : ""}]`;
+  }
+  return `USB Serial Device [VID ${vidHex}${pidHex ? ` : PID ${pidHex}` : ""}]`;
+}

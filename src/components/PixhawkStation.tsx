@@ -28,8 +28,19 @@ import {
   Laptop,
   PlaneTakeoff,
   MapPin,
+  Usb,
+  HelpCircle,
+  ExternalLink,
+  Check,
+  ChevronRight,
+  Search,
+  Settings,
+  AlertCircle,
+  Info,
+  Cable,
 } from "lucide-react";
 import { usePixhawk } from "../lib/PixhawkContext";
+import { getDeviceDescription } from "../lib/pixhawkManager";
 import { useDRS } from "../store";
 import { cn } from "../lib/utils";
 
@@ -48,6 +59,7 @@ export function PixhawkStation() {
   const {
     pixhawk,
     connectSerial,
+    connectPortInstance,
     disconnectSerial,
     startSimulation,
     stopSimulation,
@@ -57,6 +69,12 @@ export function PixhawkStation() {
     selectedBaud,
     setSelectedBaud,
     syncSystemGpsToPixhawk,
+    pairedPorts,
+    refreshPairedPorts,
+    isWebSerialSupported,
+    isIframe,
+    knownDevices,
+    activePortInfo,
   } = usePixhawk();
 
   const {
@@ -71,25 +89,43 @@ export function PixhawkStation() {
     userLocation,
   } = useDRS();
 
-  const [activeTab, setActiveTab] = useState<"cockpit" | "gps_compass" | "serial_inspector" | "commands">("cockpit");
+  const [activeTab, setActiveTab] = useState<
+    "cockpit" | "gps_compass" | "serial_inspector" | "commands" | "ports_manager"
+  >("cockpit");
   const [filterMsg, setFilterMsg] = useState<string>("ALL");
   const [isConnecting, setIsConnecting] = useState(false);
+  const [connectingPortIndex, setConnectingPortIndex] = useState<number | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
   const [customBaudInput, setCustomBaudInput] = useState<string>("");
+  const [searchFilter, setSearchFilter] = useState<string>("");
 
   const { serial, gps, compass, telemetry, statusLogs, recentPackets } = pixhawk;
 
-  const handleConnect = async () => {
+  const handleConnect = async (unfiltered = true) => {
     setIsConnecting(true);
     setConnectError(null);
     try {
       const baud = customBaudInput && !isNaN(Number(customBaudInput)) ? Number(customBaudInput) : selectedBaud;
-      const res = await connectSerial(baud);
+      const res = await connectSerial(baud, unfiltered);
       if (!res.success && res.error) {
         setConnectError(res.error);
       }
     } finally {
       setIsConnecting(false);
+    }
+  };
+
+  const handleConnectExistingPort = async (port: any, index: number) => {
+    setConnectingPortIndex(index);
+    setConnectError(null);
+    try {
+      const baud = customBaudInput && !isNaN(Number(customBaudInput)) ? Number(customBaudInput) : selectedBaud;
+      const res = await connectPortInstance(port, baud);
+      if (!res.success && res.error) {
+        setConnectError(res.error);
+      }
+    } finally {
+      setConnectingPortIndex(null);
     }
   };
 
@@ -213,12 +249,25 @@ export function PixhawkStation() {
           {!serial.connected ? (
             <>
               <button
-                onClick={handleConnect}
+                onClick={() => handleConnect(true)}
                 disabled={isConnecting}
                 className="flex items-center gap-2 px-4 py-2 bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/50 hover:border-cyan-400 text-cyan-300 hover:text-cyan-100 rounded-lg text-xs font-mono font-bold tracking-wider transition-all shadow-[0_0_12px_rgba(6,182,212,0.15)] disabled:opacity-50"
+                title="Open browser serial port manager showing all connected COM ports and Pixhawk devices (Unfiltered)"
               >
                 <LinkIcon className="w-3.5 h-3.5" />
-                <span>{isConnecting ? "CONNECTING..." : "CONNECT PIXHAWK USB / RADIO"}</span>
+                <span>{isConnecting ? "CONNECTING..." : "CONNECT PIXHAWK (ALL PORTS)"}</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab("ports_manager")}
+                className="flex items-center gap-1.5 px-3 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white rounded-lg text-xs font-mono font-bold transition-all"
+                title="Manage paired ports, test baud rates, and troubleshoot missing Pixhawk devices"
+              >
+                <Usb className="w-3.5 h-3.5 text-cyan-400" />
+                <span>PORTS MANAGER</span>
+                {pairedPorts.length > 0 && (
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 ml-0.5" />
+                )}
               </button>
 
               <button
@@ -254,18 +303,26 @@ export function PixhawkStation() {
       </div>
 
       {connectError && (
-        <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-lg flex items-center gap-2.5 text-rose-300 text-xs font-mono">
-          <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-          <span>{connectError}</span>
+        <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-rose-300 text-xs font-mono">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+            <span>{connectError}</span>
+          </div>
+          <button
+            onClick={() => setActiveTab("ports_manager")}
+            className="px-3 py-1 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/50 text-rose-200 rounded text-xs font-bold shrink-0 transition-colors"
+          >
+            Open Ports Troubleshooter
+          </button>
         </div>
       )}
 
       {/* Nav Tabs */}
-      <div className="flex items-center gap-2 border-b border-zinc-800 pb-2">
+      <div className="flex items-center gap-2 border-b border-zinc-800 pb-2 overflow-x-auto custom-scrollbar">
         <button
           onClick={() => setActiveTab("cockpit")}
           className={cn(
-            "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all",
+            "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all whitespace-nowrap",
             activeTab === "cockpit"
               ? "bg-cyan-500/15 border border-cyan-500/40 text-cyan-300"
               : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900"
@@ -278,7 +335,7 @@ export function PixhawkStation() {
         <button
           onClick={() => setActiveTab("gps_compass")}
           className={cn(
-            "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all",
+            "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all whitespace-nowrap",
             activeTab === "gps_compass"
               ? "bg-cyan-500/15 border border-cyan-500/40 text-cyan-300"
               : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900"
@@ -291,7 +348,7 @@ export function PixhawkStation() {
         <button
           onClick={() => setActiveTab("serial_inspector")}
           className={cn(
-            "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all",
+            "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all whitespace-nowrap",
             activeTab === "serial_inspector"
               ? "bg-cyan-500/15 border border-cyan-500/40 text-cyan-300"
               : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900"
@@ -304,7 +361,7 @@ export function PixhawkStation() {
         <button
           onClick={() => setActiveTab("commands")}
           className={cn(
-            "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all",
+            "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all whitespace-nowrap",
             activeTab === "commands"
               ? "bg-cyan-500/15 border border-cyan-500/40 text-cyan-300"
               : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900"
@@ -312,6 +369,24 @@ export function PixhawkStation() {
         >
           <Sliders className="w-3.5 h-3.5" />
           <span>Autopilot Modes & Commands</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab("ports_manager")}
+          className={cn(
+            "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all whitespace-nowrap",
+            activeTab === "ports_manager"
+              ? "bg-cyan-500/15 border border-cyan-500/40 text-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.2)]"
+              : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900"
+          )}
+        >
+          <Usb className="w-3.5 h-3.5 text-cyan-400" />
+          <span>Serial Ports Manager & Troubleshooter</span>
+          {pairedPorts.length > 0 && (
+            <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold">
+              {pairedPorts.length}
+            </span>
+          )}
         </button>
       </div>
 
@@ -922,6 +997,342 @@ export function PixhawkStation() {
                   REQUEST 10HZ
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 5: SERIAL PORTS MANAGER & HARDWARE DIAGNOSTICS */}
+      {activeTab === "ports_manager" && (
+        <div className="flex flex-col gap-6">
+          {/* Top Banner: Web Serial System Status */}
+          <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 backdrop-blur-md">
+            <div className="flex items-center gap-3">
+              <div className={cn(
+                "p-3 rounded-xl border flex items-center justify-center",
+                isWebSerialSupported
+                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                  : "bg-rose-500/10 border-rose-500/30 text-rose-400"
+              )}>
+                <Usb className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-bold font-mono tracking-wider uppercase text-zinc-100">
+                    Host Serial Port Subsystem
+                  </h2>
+                  <span className={cn(
+                    "text-[10px] font-mono px-2 py-0.5 rounded font-bold border",
+                    isWebSerialSupported
+                      ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                      : "bg-rose-500/20 text-rose-300 border-rose-500/40"
+                  )}>
+                    {isWebSerialSupported ? "WEB SERIAL SUPPORTED" : "UNSUPPORTED BROWSER"}
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-400 font-mono mt-0.5">
+                  Direct hardware access to USB COM ports, Telemetry Radios, FTDI, CP210x, and STM32 flight controllers.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={refreshPairedPorts}
+                className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Refresh Paired Ports</span>
+              </button>
+
+              {isIframe && (
+                <button
+                  onClick={() => window.open(window.location.href, "_blank")}
+                  className="px-3 py-1.5 bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/50 text-cyan-300 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-colors"
+                  title="Open app in a top-level browser tab for unconstrained USB Serial hardware permissions"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Open in Standalone Tab</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Connect Actions Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* Action 1: Unfiltered Request (Primary - Solves missing Pixhawk!) */}
+            <div className="bg-zinc-900/40 border border-cyan-500/40 rounded-xl p-5 flex flex-col gap-3 shadow-[0_0_15px_rgba(6,182,212,0.1)]">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-2">
+                  <Search className="w-4 h-4" />
+                  Scan All Serial Ports (Unfiltered)
+                </span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/30">
+                  RECOMMENDED
+                </span>
+              </div>
+              <p className="text-xs text-zinc-300 font-mono leading-relaxed">
+                Opens the browser's device picker showing <strong>every connected COM port and USB device</strong> without vendor ID filtering. If your Pixhawk uses a CH340, CP2102, FTDI, Holybro, or generic virtual COM port, this guarantees it is visible.
+              </p>
+              <div className="pt-2 mt-auto">
+                <button
+                  onClick={() => handleConnect(true)}
+                  disabled={isConnecting}
+                  className="w-full py-2.5 px-4 bg-cyan-500 hover:bg-cyan-400 text-zinc-950 rounded-lg text-xs font-mono font-bold tracking-wider transition-all flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
+                >
+                  <LinkIcon className="w-4 h-4" />
+                  <span>{isConnecting ? "OPENING BROWSER PORT MANAGER..." : "SCAN & SELECT FROM ALL COM PORTS"}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Action 2: Autopilot Filtered Request */}
+            <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-5 flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-200 flex items-center gap-2">
+                  <Cpu className="w-4 h-4 text-zinc-400" />
+                  Scan Autopilots (Filtered by 12+ VIDs)
+                </span>
+                <span className="text-[10px] font-mono text-zinc-500">
+                  12 Autopilot Vendor IDs
+                </span>
+              </div>
+              <p className="text-xs text-zinc-400 font-mono leading-relaxed">
+                Prompts only for devices matching official Pixhawk, Holybro (0x3162), CubePilot (0x2DAE), STMicro (0x0483), 3DR (0x26AC), ArduPilot (0x1209), and SiK Telemetry Radios.
+              </p>
+              <div className="pt-2 mt-auto">
+                <button
+                  onClick={() => handleConnect(false)}
+                  disabled={isConnecting}
+                  className="w-full py-2.5 px-4 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 hover:text-white rounded-lg text-xs font-mono font-bold tracking-wider transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <Search className="w-4 h-4" />
+                  <span>{isConnecting ? "SEARCHING..." : "SCAN AUTOPILOT VENDOR IDs ONLY"}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Section: Detected & Paired Ports List */}
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5 flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Cable className="w-4 h-4 text-cyan-400" />
+                <h3 className="text-sm font-mono font-bold text-zinc-100 uppercase tracking-wider">
+                  Paired Host Serial Ports ({pairedPorts.length})
+                </h3>
+              </div>
+              <span className="text-xs font-mono text-zinc-500">
+                Ports granted permission in this browser session
+              </span>
+            </div>
+
+            {pairedPorts.length === 0 ? (
+              <div className="p-6 bg-zinc-950 border border-zinc-800/80 rounded-xl flex flex-col items-center justify-center text-center gap-2 text-zinc-500 font-mono text-xs">
+                <Usb className="w-8 h-8 opacity-40 text-cyan-400" />
+                <span className="text-zinc-300 font-bold">No serial ports are currently paired in this browser session.</span>
+                <p className="max-w-md text-zinc-500 text-[11px]">
+                  Click <strong>"SCAN & SELECT FROM ALL COM PORTS"</strong> above to grant Chrome/Edge permission to connect to your Pixhawk flight controller or telemetry radio.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {pairedPorts.map((port, idx) => {
+                  const info = port.getInfo ? port.getInfo() : {};
+                  const isCurrent = serial.connected && activePortInfo?.usbVendorId === info.usbVendorId;
+                  const desc = getDeviceDescription(info);
+
+                  return (
+                    <div
+                      key={idx}
+                      className={cn(
+                        "p-4 rounded-xl border flex flex-col justify-between gap-3 font-mono transition-all",
+                        isCurrent
+                          ? "bg-emerald-950/40 border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.15)]"
+                          : "bg-zinc-950 border-zinc-800 hover:border-zinc-700"
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2.5">
+                          <div className={cn(
+                            "p-2 rounded-lg border",
+                            isCurrent
+                              ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
+                              : "bg-zinc-900 border-zinc-800 text-zinc-400"
+                          )}>
+                            <Usb className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-zinc-200">
+                              Port #{idx + 1}: {desc}
+                            </div>
+                            <div className="text-[10px] text-zinc-500 mt-0.5">
+                              {info.usbVendorId ? (
+                                <span>VID: 0x{info.usbVendorId.toString(16).toUpperCase()} • PID: 0x{(info.usbProductId || 0).toString(16).toUpperCase()}</span>
+                              ) : (
+                                <span>Native System COM Port</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {isCurrent && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shrink-0">
+                            CONNECTED
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-900">
+                        {isCurrent ? (
+                          <button
+                            onClick={disconnectSerial}
+                            className="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 text-xs font-bold transition-colors"
+                          >
+                            Disconnect
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleConnectExistingPort(port, idx)}
+                            disabled={isConnecting || connectingPortIndex === idx}
+                            className="px-3 py-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/50 text-cyan-300 text-xs font-bold transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                          >
+                            <LinkIcon className="w-3.5 h-3.5" />
+                            <span>{connectingPortIndex === idx ? "Connecting..." : "Connect This Port"}</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Section: Interactive Troubleshooting Guide "Why is Pixhawk Not Visible?" */}
+          <div className="bg-zinc-900/50 border border-amber-500/30 rounded-xl p-5 flex flex-col gap-4">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-amber-400" />
+                <h3 className="text-sm font-mono font-bold text-amber-300 uppercase tracking-wider">
+                  Troubleshooting Guide: Why is Pixhawk Not Visible in Serial Ports Manager?
+                </h3>
+              </div>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30">
+                6-STEP FIX CHECKLIST
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 font-mono text-xs">
+              {/* Check 1: Cable */}
+              <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 flex flex-col gap-2">
+                <div className="flex items-center gap-2 text-rose-400 font-bold">
+                  <Cable className="w-4 h-4 shrink-0" />
+                  <span>1. Check USB Cable (Most Common)</span>
+                </div>
+                <p className="text-zinc-400 text-[11px] leading-relaxed">
+                  Over 60% of USB cables are <strong>charge-only</strong> cables lacking D+/D- data lines. The Pixhawk LEDs light up and beep, but the OS receives zero USB data signals.
+                </p>
+                <div className="mt-auto p-2 rounded bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-300">
+                  <strong className="text-emerald-400">Solution:</strong> Use a certified high-speed data sync cable (e.g. from an external SSD or smartphone).
+                </div>
+              </div>
+
+              {/* Check 2: Drivers */}
+              <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 flex flex-col gap-2">
+                <div className="flex items-center gap-2 text-cyan-400 font-bold">
+                  <Settings className="w-4 h-4 shrink-0" />
+                  <span>2. Windows STM32 / PX4 Drivers</span>
+                </div>
+                <p className="text-zinc-400 text-[11px] leading-relaxed">
+                  On Windows, if Device Manager lists "PX4 FMU" or "STM32 BOOTLOADER" under Other Devices with a yellow exclamation, the virtual COM port driver is missing.
+                </p>
+                <div className="mt-auto p-2 rounded bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-300">
+                  <strong className="text-emerald-400">Solution:</strong> Install Mission Planner or QGroundControl (which packages signed drivers) or STMicroelectronics VCP driver.
+                </div>
+              </div>
+
+              {/* Check 3: Port Locked */}
+              <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 flex flex-col gap-2">
+                <div className="flex items-center gap-2 text-amber-400 font-bold">
+                  <ShieldAlert className="w-4 h-4 shrink-0" />
+                  <span>3. Exclusive Port Lock</span>
+                </div>
+                <p className="text-zinc-400 text-[11px] leading-relaxed">
+                  Serial ports are strictly single-client. If Mission Planner, QGroundControl, Arduino IDE Serial Monitor, Betaflight, Cura, or PuTTY is open, the port is locked.
+                </p>
+                <div className="mt-auto p-2 rounded bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-300">
+                  <strong className="text-emerald-400">Solution:</strong> Completely close all background ground control stations or terminal programs before scanning.
+                </div>
+              </div>
+
+              {/* Check 4: Browser Support */}
+              <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 flex flex-col gap-2">
+                <div className="flex items-center gap-2 text-purple-400 font-bold">
+                  <ExternalLink className="w-4 h-4 shrink-0" />
+                  <span>4. Browser & Frame Permissions</span>
+                </div>
+                <p className="text-zinc-400 text-[11px] leading-relaxed">
+                  Web Serial API requires desktop <strong>Google Chrome, Microsoft Edge, or Opera</strong>. Firefox and Safari do not support Web Serial.
+                </p>
+                <div className="mt-auto p-2 rounded bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-300">
+                  <strong className="text-emerald-400">Solution:</strong> If in an iframe preview, open the app in a standalone browser window.
+                </div>
+              </div>
+
+              {/* Check 5: Baud Rate */}
+              <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 flex flex-col gap-2">
+                <div className="flex items-center gap-2 text-blue-400 font-bold">
+                  <Gauge className="w-4 h-4 shrink-0" />
+                  <span>5. Radio vs USB Baud Rates</span>
+                </div>
+                <p className="text-zinc-400 text-[11px] leading-relaxed">
+                  Direct Pixhawk USB CDC operates at <strong>115,200 baud</strong>. SiK / Holybro 433/915MHz telemetry radios operate at <strong>57,600 baud</strong>.
+                </p>
+                <div className="mt-auto p-2 rounded bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-300">
+                  <strong className="text-emerald-400">Solution:</strong> Switch baud to 57600 when connecting wireless telemetry dongles.
+                </div>
+              </div>
+
+              {/* Check 6: OS Commands */}
+              <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 flex flex-col gap-2">
+                <div className="flex items-center gap-2 text-emerald-400 font-bold">
+                  <Terminal className="w-4 h-4 shrink-0" />
+                  <span>6. Operating System Verification</span>
+                </div>
+                <p className="text-zinc-400 text-[11px] leading-relaxed">
+                  Check if OS detects hardware:
+                  <br />• Win: <code className="text-cyan-300">devmgmt.msc</code> (Ports COM & LPT)
+                  <br />• Mac: <code className="text-cyan-300">ls /dev/cu.usbmodem*</code>
+                  <br />• Linux: <code className="text-cyan-300">ls /dev/ttyACM*</code>
+                </p>
+                <div className="mt-auto p-2 rounded bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-300">
+                  <strong className="text-emerald-400">Linux Fix:</strong> Run <code className="text-cyan-300">sudo usermod -a -G dialout $USER</code>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Section: Known Hardware Vendor IDs Reference */}
+          <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-5 flex flex-col gap-3 font-mono text-xs">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+              <span className="font-bold text-zinc-200 uppercase tracking-wider flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-cyan-400" />
+                Supported Autopilot Hardware Vendor Directory ({knownDevices.length} Models)
+              </span>
+              <span className="text-[11px] text-zinc-500">Auto-matched in Web Serial</span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 pt-1 text-[11px]">
+              {knownDevices.map((dev) => (
+                <div key={dev.usbVendorId} className="p-2.5 rounded-lg bg-zinc-950 border border-zinc-800/80 flex flex-col gap-1">
+                  <span className="font-bold text-cyan-300">{dev.manufacturer}</span>
+                  <span className="text-zinc-400 truncate">{dev.deviceType}</span>
+                  <span className="text-[10px] text-zinc-600 font-mono">
+                    VID: 0x{dev.usbVendorId.toString(16).toUpperCase().padStart(4, "0")}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         </div>

@@ -9,12 +9,16 @@ import {
   PixhawkSerialState,
   PixhawkLogEntry,
   PixhawkPacketEntry,
+  KNOWN_PIXHAWK_DEVICES,
+  getDeviceDescription,
+  KnownAutopilotHardware,
 } from "./pixhawkManager";
 import { useDRS } from "../store";
 
-interface PixhawkContextType {
+export interface PixhawkContextType {
   pixhawk: PixhawkState;
-  connectSerial: (baudRate?: number) => Promise<{ success: boolean; error?: string }>;
+  connectSerial: (baudRate?: number, unfiltered?: boolean) => Promise<{ success: boolean; error?: string }>;
+  connectPortInstance: (port: any, baudRate?: number) => Promise<{ success: boolean; error?: string }>;
   disconnectSerial: () => Promise<void>;
   startSimulation: () => void;
   stopSimulation: () => void;
@@ -24,6 +28,12 @@ interface PixhawkContextType {
   selectedBaud: number;
   setSelectedBaud: (baud: number) => void;
   syncSystemGpsToPixhawk: (centerMap?: boolean) => void;
+  pairedPorts: any[];
+  refreshPairedPorts: () => Promise<any[]>;
+  isWebSerialSupported: boolean;
+  isIframe: boolean;
+  knownDevices: KnownAutopilotHardware[];
+  activePortInfo: { usbVendorId?: number; usbProductId?: number; description: string } | null;
 }
 
 const PixhawkContext = createContext<PixhawkContextType | undefined>(undefined);
@@ -40,6 +50,11 @@ export function PixhawkProvider({ children }: { children: ReactNode }) {
 
   const [pixhawk, setPixhawk] = useState<PixhawkState>(INITIAL_PIXHAWK_STATE);
   const [selectedBaud, setSelectedBaud] = useState<number>(115200);
+  const [pairedPorts, setPairedPorts] = useState<any[]>([]);
+  const [activePortInfo, setActivePortInfo] = useState<{ usbVendorId?: number; usbProductId?: number; description: string } | null>(null);
+
+  const isWebSerialSupported = typeof navigator !== "undefined" && "serial" in navigator;
+  const isIframe = typeof window !== "undefined" && window.self !== window.top;
 
   const portRef = useRef<any>(null);
   const readerRef = useRef<any>(null);
@@ -304,35 +319,49 @@ export function PixhawkProvider({ children }: { children: ReactNode }) {
     [selectedDroneId, drones, updateDroneTelemetry, gpsSourceMode, setGpsFromPixhawk, addLog, addPacketEntry]
   );
 
-  // Web Serial Port Connection
-  const connectSerial = async (baudRate?: number): Promise<{ success: boolean; error?: string }> => {
-    if (!("serial" in navigator)) {
-      const err = "Web Serial API is not supported in this browser environment. Use Chrome or Edge, or open the app directly.";
-      addLog(err, "ERROR");
-      return { success: false, error: err };
-    }
-
-    const baud = baudRate || selectedBaud || 115200;
-    setSelectedBaud(baud);
-
-    try {
-      stopSimulation();
-
-      // Request port from user
-      // @ts-ignore
-      const port = await navigator.serial.requestPort({
-        filters: [
-          { usbVendorId: 0x26ac }, // 3DR Pixhawk
-          { usbVendorId: 0x0483 }, // STMicroelectronics (Pixhawk Virtual COM Port)
-          { usbVendorId: 0x10c4 }, // Silicon Labs CP210x (SiK Telemetry Radios)
-          { usbVendorId: 0x0403 }, // FTDI Telemetry Radio
-        ],
-      }).catch(async () => {
-        // Fallback filter: allow any serial port if specific vendor ID filter cancelled
+  // Refresh paired ports from browser
+  const refreshPairedPorts = useCallback(async () => {
+    if (typeof navigator !== "undefined" && "serial" in navigator) {
+      try {
         // @ts-ignore
-        return await navigator.serial.requestPort();
-      });
+        const ports = await navigator.serial.getPorts();
+        setPairedPorts(ports || []);
+        return ports || [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  }, []);
 
+  // Listen to hardware plug/unplug events
+  useEffect(() => {
+    refreshPairedPorts();
+    if (typeof navigator !== "undefined" && "serial" in navigator) {
+      const handlePortConnect = () => {
+        refreshPairedPorts();
+        addLog("Serial hardware device connected to system.", "INFO");
+      };
+      const handlePortDisconnect = () => {
+        refreshPairedPorts();
+        addLog("Serial hardware device disconnected from system.", "WARNING");
+      };
+      // @ts-ignore
+      navigator.serial.addEventListener("connect", handlePortConnect);
+      // @ts-ignore
+      navigator.serial.addEventListener("disconnect", handlePortDisconnect);
+      return () => {
+        // @ts-ignore
+        navigator.serial.removeEventListener("connect", handlePortConnect);
+        // @ts-ignore
+        navigator.serial.removeEventListener("disconnect", handlePortDisconnect);
+      };
+    }
+  }, [refreshPairedPorts, addLog]);
+
+  // Open and run port worker loop
+  const openAndRunPort = async (port: any, baud: number): Promise<{ success: boolean; error?: string }> => {
+    try {
       await port.open({
         baudRate: baud,
         dataBits: 8,
@@ -346,9 +375,12 @@ export function PixhawkProvider({ children }: { children: ReactNode }) {
 
       // Extract port info if available
       const info = port.getInfo ? port.getInfo() : {};
-      const portDesc = info.usbVendorId
-        ? `VID 0x${info.usbVendorId.toString(16)} : PID 0x${(info.usbProductId || 0).toString(16)}`
-        : `USB COM Port @ ${baud.toLocaleString()} baud`;
+      const portDesc = getDeviceDescription(info);
+      setActivePortInfo({
+        usbVendorId: info.usbVendorId,
+        usbProductId: info.usbProductId,
+        description: portDesc,
+      });
 
       setPixhawk((prev) => ({
         ...prev,
@@ -409,12 +441,72 @@ export function PixhawkProvider({ children }: { children: ReactNode }) {
       })();
 
       return { success: true };
+    } catch (openErr: any) {
+      let msg = openErr?.message || "Failed to open serial port.";
+      if (openErr?.name === "InvalidStateError" || msg.includes("already open")) {
+        msg = "The serial port is already open in another window or session.";
+      } else if (openErr?.name === "NetworkError" || msg.includes("busy") || msg.includes("Access denied")) {
+        msg = "Access denied: The serial port is currently locked exclusively by another application (e.g. Mission Planner, QGroundControl, Arduino IDE, or PuTTY). Please close other applications and try again.";
+      }
+      addLog(`Port open error: ${msg}`, "ERROR");
+      return { success: false, error: msg };
+    }
+  };
+
+  // Web Serial Port Connection
+  const connectSerial = async (baudRate?: number, unfiltered = true): Promise<{ success: boolean; error?: string }> => {
+    if (!("serial" in navigator)) {
+      const err = "Web Serial API is not supported in this browser environment. Please use Google Chrome, Microsoft Edge, or Opera on desktop.";
+      addLog(err, "ERROR");
+      return { success: false, error: err };
+    }
+
+    const baud = baudRate || selectedBaud || 115200;
+    setSelectedBaud(baud);
+
+    try {
+      stopSimulation();
+
+      let port: any;
+      if (unfiltered) {
+        // UNFILTERED: Shows ALL serial devices, COM ports, USB adapters, and Pixhawks in Chrome's picker
+        // @ts-ignore
+        port = await navigator.serial.requestPort();
+      } else {
+        // FILTERED: Matches all known autopilot and telemetry radio USB Vendor IDs
+        // @ts-ignore
+        port = await navigator.serial.requestPort({
+          filters: KNOWN_PIXHAWK_DEVICES.map((d) => ({ usbVendorId: d.usbVendorId })),
+        });
+      }
+
+      const res = await openAndRunPort(port, baud);
+      await refreshPairedPorts();
+      return res;
     } catch (err: any) {
-      let msg = err?.message || "Failed to open serial port.";
-      if (err?.name === "SecurityError" || msg.includes("permissions policy") || msg.includes("disallowed")) {
-        msg = "Browser permissions policy blocked Web Serial in this preview frame. Please open the app in a new browser tab to access physical USB hardware.";
+      let msg = err?.message || "Failed to request serial port.";
+      if (err?.name === "NotFoundError") {
+        msg = "No serial port was selected in the browser manager dialog.";
+      } else if (err?.name === "SecurityError" || msg.includes("permissions policy") || msg.includes("disallowed")) {
+        msg = "Browser permissions policy blocked Web Serial inside this iframe. Open the app directly in a standalone window to grant full hardware serial access.";
       }
       addLog(`Serial error: ${msg}`, "ERROR");
+      return { success: false, error: msg };
+    }
+  };
+
+  // Connect to an already paired port directly
+  const connectPortInstance = async (port: any, baudRate?: number): Promise<{ success: boolean; error?: string }> => {
+    const baud = baudRate || selectedBaud || 115200;
+    setSelectedBaud(baud);
+    try {
+      stopSimulation();
+      const res = await openAndRunPort(port, baud);
+      await refreshPairedPorts();
+      return res;
+    } catch (err: any) {
+      const msg = err?.message || "Failed to open selected port.";
+      addLog(`Error connecting to port: ${msg}`, "ERROR");
       return { success: false, error: msg };
     }
   };
@@ -440,6 +532,7 @@ export function PixhawkProvider({ children }: { children: ReactNode }) {
       addLog(`Error closing port: ${e?.message || e}`, "WARNING");
     }
 
+    setActivePortInfo(null);
     setPixhawk((prev) => ({
       ...prev,
       serial: {
@@ -451,6 +544,7 @@ export function PixhawkProvider({ children }: { children: ReactNode }) {
     }));
 
     addLog("Pixhawk serial port disconnected.", "INFO");
+    await refreshPairedPorts();
   };
 
   // Realistic Pixhawk Telemetry Flight Simulation Mode
@@ -741,6 +835,7 @@ export function PixhawkProvider({ children }: { children: ReactNode }) {
       value={{
         pixhawk,
         connectSerial,
+        connectPortInstance,
         disconnectSerial,
         startSimulation,
         stopSimulation,
@@ -750,6 +845,12 @@ export function PixhawkProvider({ children }: { children: ReactNode }) {
         selectedBaud,
         setSelectedBaud,
         syncSystemGpsToPixhawk,
+        pairedPorts,
+        refreshPairedPorts,
+        isWebSerialSupported,
+        isIframe,
+        knownDevices: KNOWN_PIXHAWK_DEVICES,
+        activePortInfo,
       }}
     >
       {children}
